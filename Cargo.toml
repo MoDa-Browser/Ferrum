@@ -1,0 +1,47 @@
+[package]
+name = "moda-core"
+version = "0.1.0"
+edition = "2021"
+description = "MoDa Browser Core - Modern secure browser engine"
+license = "MIT"
+repository = "https://github.com/Moda-Browser/Core"
+
+[[bin]]
+name = "moda-core"
+path = "src/main.rs"
+
+[workspace]
+members = [
+    "src/security",
+    "src/sandbox",
+    "src/ipc",
+    "src/network",
+    "src/storage",
+    "src/platform",
+]
+
+[dependencies]
+tokio = { version = "1.35", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+moda-security = { path = "src/security" }
+moda-sandbox = { path = "src/sandbox" }
+moda-ipc = { path = "src/ipc" }
+moda-network = { path = "src/network" }
+moda-storage = { path = "src/storage" }
+moda-platform = { path = "src/platform" }
+
+[dev-dependencies]
+criterion = "0.5"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[profile.dev]
+opt-level = 0
+debug = true

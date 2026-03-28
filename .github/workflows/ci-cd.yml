@@ -1,0 +1,244 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, dev, feat, feature/* ]
+  pull_request:
+    branches: [ main, dev ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-check:
+    name: Rust Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        components: rustfmt, clippy
+        override: true
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo build
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Check formatting
+      run: |
+        cd src/security && cargo fmt -- --check
+        cd ../sandbox && cargo fmt -- --check
+        cd ../ipc && cargo fmt -- --check
+        cd ../network && cargo fmt -- --check
+        cd ../storage && cargo fmt -- --check
+        cd ../platform && cargo fmt -- --check
+    
+    - name: Run Clippy
+      run: |
+        cd src/security && cargo clippy -- -D warnings
+        cd ../sandbox && cargo clippy -- -D warnings
+        cd ../ipc && cargo clippy -- -D warnings
+        cd ../network && cargo clippy -- -D warnings
+        cd ../storage && cargo clippy -- -D warnings
+        cd ../platform && cargo clippy -- -D warnings
+    
+    - name: Run tests
+      run: |
+        cd src/security && cargo test
+        cd ../sandbox && cargo test
+        cd ../ipc && cargo test
+        cd ../network && cargo test
+        cd ../storage && cargo test
+        cd ../platform && cargo test
+
+  cpp-check:
+    name: C++ Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake clang-tidy cppcheck
+    
+    - name: Configure CMake
+      run: |
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Debug
+    
+    - name: Run clang-tidy
+      run: |
+        cd build
+        run-clang-tidy -p . ../src/render/src/
+    
+    - name: Run cppcheck
+      run: |
+        cppcheck --enable=all --error-exitcode=1 --suppress=missingIncludeSystem src/render/src/
+
+  build:
+    name: Build Project
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust (Unix)
+      if: runner.os != 'Windows'
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    
+    - name: Install Rust (Windows)
+      if: runner.os == 'Windows'
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    
+    - name: Install CMake
+      run: |
+        if [ "$RUNNER_OS" == "Linux" ]; then
+          sudo apt-get install -y cmake
+        elif [ "$RUNNER_OS" == "macOS" ]; then
+          brew install cmake
+        fi
+      shell: bash
+    
+    - name: Build Rust components
+      run: |
+        cd src/security && cargo build --release
+        cd ../sandbox && cargo build --release
+        cd ../ipc && cargo build --release
+        cd ../network && cargo build --release
+        cd ../storage && cargo build --release
+        cd ../platform && cargo build --release
+    
+    - name: Build C++ components
+      run: |
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release
+        cmake --build . --config Release
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    
+    - name: Install cargo-audit
+      run: cargo install cargo-audit
+    
+    - name: Run security audit
+      run: |
+        cd src/security && cargo audit
+        cd ../sandbox && cargo audit
+        cd ../ipc && cargo audit
+        cd ../network && cargo audit
+        cd ../storage && cargo audit
+        cd ../platform && cargo audit
+
+  code-coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    
+    - name: Install tarpaulin
+      run: cargo install cargo-tarpaulin
+    
+    - name: Generate coverage report
+      run: |
+        cd src/security && cargo tarpaulin --out Xml --output-dir ../../coverage/security
+        cd ../sandbox && cargo tarpaulin --out Xml --output-dir ../../coverage/sandbox
+        cd ../ipc && cargo tarpaulin --out Xml --output-dir ../../coverage/ipc
+        cd ../network && cargo tarpaulin --out Xml --output-dir ../../coverage/network
+        cd ../storage && cargo tarpaulin --out Xml --output-dir ../../coverage/storage
+        cd ../platform && cargo tarpaulin --out Xml --output-dir ../../coverage/platform
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./coverage/**/*.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  review-check:
+    name: Code Review Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Check PR description
+      run: |
+        if [ -z "${{ github.event.pull_request.body }}" ]; then
+          echo "PR description is required"
+          exit 1
+        fi
+    
+    - name: Check commit messages
+      run: |
+        for commit in $(git rev-list --no-merges origin/main..HEAD); do
+          message=$(git log -1 --pretty=%B $commit)
+          if [[ ! "$message" =~ ^(feat|fix|docs|style|refactor|test|chore)(\(.+\))?:\ .+ ]]; then
+            echo "Invalid commit message format: $message"
+            echo "Expected format: type(scope): description"
+            exit 1
+          fi
+        done
+    
+    - name: Check for TODO comments
+      run: |
+        if git diff --name-only origin/main..HEAD | xargs grep -l "TODO"; then
+          echo "Please resolve TODO comments before merging"
+          exit 1
+        fi

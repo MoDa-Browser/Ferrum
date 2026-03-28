@@ -1,0 +1,131 @@
+use std::sync::Arc;
+
+mod security;
+mod sandbox;
+mod ipc;
+mod network;
+mod storage;
+mod platform;
+
+use security::{CapabilityToken, Capability, PermissionManager, PermissionPolicy};
+use sandbox::{Sandbox, NamespaceConfig};
+use ipc::{IpcChannel, IpcMessage, IpcSecurity};
+use network::{HttpClient, TlsConfig, TlsVersion};
+use storage::SecureStorage;
+use platform::{Platform, PlatformInfo};
+
+fn main() {
+    println!("MoDa Browser Core - Prototype");
+    println!("==============================");
+    println!();
+
+    println!("1. Platform Detection");
+    println!("--------------------");
+    let platform_info = PlatformInfo::new();
+    println!("Platform: {}", platform_info.platform().name());
+    println!("Architecture: {}", platform_info.arch());
+    println!("Sandbox supported: {}", platform_info.platform().supports_sandbox());
+    println!();
+
+    println!("2. Security Framework");
+    println!("--------------------");
+    let token = CapabilityToken::new("test-token")
+        .with_capability(Capability::NetworkAccess)
+        .with_capability(Capability::FileSystemRead);
+    
+    println!("Token ID: {}", token.id());
+    println!("Capabilities: {:?}", token.capabilities());
+    println!("Is expired: {}", token.is_expired());
+    println!();
+
+    println!("3. Permission Management");
+    println!("-----------------------");
+    let permission_manager = PermissionManager::new();
+    let policy = PermissionPolicy {
+        allowed_capabilities: vec![Capability::NetworkAccess],
+        denied_capabilities: vec![Capability::FileSystemWrite],
+    };
+    permission_manager.add_policy("test-resource", policy);
+    
+    match permission_manager.check_permission("test-resource", &Capability::NetworkAccess) {
+        Ok(allowed) => println!("Network access allowed: {}", allowed),
+        Err(e) => println!("Error: {}", e),
+    }
+    println!();
+
+    println!("4. Sandbox Management");
+    println!("--------------------");
+    let namespace_config = NamespaceConfig::new()
+        .with_pid(true)
+        .with_network(true);
+    
+    let sandbox = Sandbox::new()
+        .with_namespace(namespace_config);
+    
+    println!("Sandbox configured with PID and network namespaces");
+    println!();
+
+    println!("5. IPC Communication");
+    println!("-------------------");
+    let channel = IpcChannel::new();
+    let security = IpcSecurity::new().with_authentication(true);
+    
+    let message = IpcMessage::new("sender", "receiver", vec![1, 2, 3, 4, 5]);
+    
+    match security.validate_message(&message) {
+        Ok(_) => println!("Message validated successfully"),
+        Err(e) => println!("Validation error: {}", e),
+    }
+    
+    match channel.send(message) {
+        Ok(_) => println!("Message sent successfully"),
+        Err(e) => println!("Send error: {}", e),
+    }
+    
+    match channel.receive() {
+        Ok(received) => println!("Message received: {} -> {}", received.source, received.target),
+        Err(e) => println!("Receive error: {}", e),
+    }
+    println!();
+
+    println!("6. Network Stack");
+    println!("---------------");
+    let tls_config = TlsConfig::new()
+        .with_min_tls_version(TlsVersion::Tls1_2)
+        .with_max_tls_version(TlsVersion::Tls1_3);
+    
+    match tls_config.validate() {
+        Ok(_) => println!("TLS configuration valid"),
+        Err(e) => println!("TLS config error: {}", e),
+    }
+    
+    let http_client = HttpClient::new();
+    println!("HTTP client initialized");
+    println!();
+
+    println!("7. Secure Storage");
+    println!("----------------");
+    let key = [0u8; 32];
+    let storage = SecureStorage::new(&key);
+    
+    let plaintext = b"Hello, MoDa Browser!";
+    let encrypted = storage.encrypt(plaintext);
+    
+    match encrypted {
+        Ok(data) => println!("Encrypted data size: {} bytes", data.ciphertext.len()),
+        Err(e) => println!("Encryption error: {}", e),
+    }
+    
+    if let Ok(encrypted_data) = encrypted {
+        let decrypted = storage.decrypt(&encrypted_data);
+        match decrypted {
+            Ok(data) => println!("Decrypted: {}", String::from_utf8_lossy(&data)),
+            Err(e) => println!("Decryption error: {}", e),
+        }
+    }
+    println!();
+
+    println!("==============================");
+    println!("Prototype execution complete!");
+    println!("All core components initialized successfully.");
+}
