@@ -87,8 +87,7 @@ mod tests {
 
     #[test]
     fn test_token_verification() {
-        let token = CapabilityToken::new("test-token")
-            .with_capability(Capability::NetworkAccess);
+        let token = CapabilityToken::new("test-token").with_capability(Capability::NetworkAccess);
 
         let required = vec![Capability::NetworkAccess].into_iter().collect();
         assert!(token.verify(&required));

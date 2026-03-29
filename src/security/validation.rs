@@ -1,4 +1,4 @@
-use super::{SecurityError, Result};
+use super::{Result, SecurityError};
 
 pub trait Validator<T> {
     fn validate(&self, input: &T) -> Result<()>;
@@ -102,7 +102,7 @@ mod tests {
     #[test]
     fn test_string_validation() {
         let validator = StringValidator::new(10);
-        
+
         assert!(validator.validate(&"short".to_string()).is_ok());
         assert!(validator.validate(&"this is too long".to_string()).is_err());
     }
@@ -110,7 +110,7 @@ mod tests {
     #[test]
     fn test_path_validation() {
         let validator = PathValidator::new();
-        
+
         assert!(validator.validate(&"relative/path".to_string()).is_ok());
         assert!(validator.validate(&"/absolute/path".to_string()).is_err());
         assert!(validator.validate(&"../parent".to_string()).is_err());
