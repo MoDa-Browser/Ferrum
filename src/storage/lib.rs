@@ -1,4 +1,3 @@
-use ring::aead;
 use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, AES_256_GCM};
 use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};

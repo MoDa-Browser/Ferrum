@@ -1,20 +1,10 @@
-use std::sync::Arc;
-
-mod security;
-mod sandbox;
-mod ipc;
-mod network;
-mod storage;
-mod platform;
-mod render;
-
-use security::{CapabilityToken, Capability, PermissionManager, PermissionPolicy};
-use sandbox::{Sandbox, NamespaceConfig};
-use ipc::{IpcChannel, IpcMessage, IpcSecurity};
-use network::{HttpClient, TlsConfig, TlsVersion};
-use storage::SecureStorage;
-use platform::{Platform, PlatformInfo};
-use render::{LayoutEngine, DOMNode, NodeType, Rect, BoxModel};
+use moda_security::{CapabilityToken, Capability, PermissionManager, PermissionPolicy};
+use moda_sandbox::{Sandbox, NamespaceConfig};
+use moda_ipc::{IpcChannel, IpcMessage, IpcSecurity};
+use moda_network::{HttpClient, TlsConfig, TlsVersion};
+use moda_storage::SecureStorage;
+use moda_platform::PlatformInfo;
+use moda_render::{LayoutEngine, DOMNode, NodeType, Rect};
 
 fn main() {
     println!("MoDa Browser Core - Prototype");
@@ -47,7 +37,7 @@ fn main() {
         allowed_capabilities: vec![Capability::NetworkAccess],
         denied_capabilities: vec![Capability::FileSystemWrite],
     };
-    permission_manager.add_policy("test-resource", policy);
+    let _ = permission_manager.add_policy("test-resource", policy);
     
     match permission_manager.check_permission("test-resource", &Capability::NetworkAccess) {
         Ok(allowed) => println!("Network access allowed: {}", allowed),
@@ -61,7 +51,7 @@ fn main() {
         .with_pid(true)
         .with_network(true);
     
-    let sandbox = Sandbox::new()
+    let _sandbox = Sandbox::new()
         .with_namespace(namespace_config);
     
     println!("Sandbox configured with PID and network namespaces");
@@ -101,7 +91,7 @@ fn main() {
         Err(e) => println!("TLS config error: {}", e),
     }
     
-    let http_client = HttpClient::new();
+    let _http_client = HttpClient::new();
     println!("HTTP client initialized");
     println!();
 
@@ -114,16 +104,16 @@ fn main() {
     let encrypted = storage.encrypt(plaintext);
     
     match encrypted {
-        Ok(data) => println!("Encrypted data size: {} bytes", data.ciphertext.len()),
-        Err(e) => println!("Encryption error: {}", e),
-    }
-    
-    if let Ok(encrypted_data) = encrypted {
-        let decrypted = storage.decrypt(&encrypted_data);
-        match decrypted {
-            Ok(data) => println!("Decrypted: {}", String::from_utf8_lossy(&data)),
-            Err(e) => println!("Decryption error: {}", e),
+        Ok(data) => {
+            println!("Encrypted data size: {} bytes", data.ciphertext.len());
+            
+            let decrypted = storage.decrypt(&data);
+            match decrypted {
+                Ok(decrypted_data) => println!("Decrypted: {}", String::from_utf8_lossy(&decrypted_data)),
+                Err(e) => println!("Decryption error: {}", e),
+            }
         }
+        Err(e) => println!("Encryption error: {}", e),
     }
     println!();
 

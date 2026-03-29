@@ -20,13 +20,16 @@ impl PermissionManager {
         }
     }
 
-    pub fn add_policy(&self, resource_id: impl Into<String>, policy: PermissionPolicy) {
-        let mut policies = self.policies.write().unwrap();
+    pub fn add_policy(&self, resource_id: impl Into<String>, policy: PermissionPolicy) -> Result<()> {
+        let mut policies = self.policies.write()
+            .map_err(|e| SecurityError::PermissionDenied(format!("Lock poisoned: {}", e)))?;
         policies.insert(resource_id.into(), policy);
+        Ok(())
     }
 
     pub fn check_permission(&self, resource_id: &str, capability: &Capability) -> Result<bool> {
-        let policies = self.policies.read().unwrap();
+        let policies = self.policies.read()
+            .map_err(|e| SecurityError::PermissionDenied(format!("Lock poisoned: {}", e)))?;
 
         if let Some(policy) = policies.get(resource_id) {
             if policy.denied_capabilities.contains(capability) {

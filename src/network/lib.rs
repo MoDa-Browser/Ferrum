@@ -3,6 +3,7 @@ pub mod tls;
 
 pub use http::HttpClient;
 pub use tls::TlsConfig;
+pub use tls::TlsVersion;
 
 use thiserror::Error;
 
