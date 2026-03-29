@@ -15,6 +15,18 @@ pub enum TlsVersion {
     Tls1_3,
 }
 
+impl PartialOrd for TlsVersion {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TlsVersion {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (*self as i32).cmp(&(*other as i32))
+    }
+}
+
 impl TlsConfig {
     pub fn new() -> Self {
         Self {

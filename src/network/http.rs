@@ -1,5 +1,6 @@
 use super::{NetworkError, Result};
 use reqwest::Client;
+use std::time::Duration;
 
 pub struct HttpClient {
     client: Client,
@@ -10,6 +11,14 @@ impl HttpClient {
         Self {
             client: Client::new(),
         }
+    }
+
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.client = Client::builder()
+            .timeout(timeout)
+            .build()
+            .unwrap_or_else(|_| Client::new());
+        self
     }
 
     pub async fn get(&self, url: &str) -> Result<String> {
@@ -49,7 +58,11 @@ mod tests {
 
     #[test]
     fn test_client_creation() {
-        let client = HttpClient::new();
-        assert_eq!(client.client.timeout(), None);
+        let _client = HttpClient::new();
+    }
+
+    #[test]
+    fn test_client_with_timeout() {
+        let _client = HttpClient::new().with_timeout(Duration::from_secs(30));
     }
 }

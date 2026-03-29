@@ -49,21 +49,21 @@ impl IpcChannel {
     }
 
     pub fn receive(&self) -> Result<IpcMessage> {
-        let receiver = self.receiver.lock().unwrap();
+        let receiver = self.receiver.lock()
+            .map_err(|e| IpcError::ChannelError(format!("Lock poisoned: {}", e)))?;
         receiver.recv().map_err(|e| {
             IpcError::ChannelError(format!("Failed to receive message: {}", e))
         })
     }
 
     pub fn try_receive(&self) -> Result<Option<IpcMessage>> {
-        let receiver = self.receiver.lock().unwrap();
-        receiver.try_recv().map(Some).map_err(|e| {
-            if e == mpsc::TryRecvError::Empty {
-                Ok(None)
-            } else {
-                IpcError::ChannelError(format!("Failed to receive message: {}", e))
-            }
-        })?
+        let receiver = self.receiver.lock()
+            .map_err(|e| IpcError::ChannelError(format!("Lock poisoned: {}", e)))?;
+        match receiver.try_recv() {
+            Ok(msg) => Ok(Some(msg)),
+            Err(mpsc::TryRecvError::Empty) => Ok(None),
+            Err(e) => Err(IpcError::ChannelError(format!("Failed to receive message: {}", e))),
+        }
     }
 }
 
