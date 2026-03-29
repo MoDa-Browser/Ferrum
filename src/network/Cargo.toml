@@ -3,6 +3,10 @@ name = "moda-network"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "moda_network"
+path = "lib.rs"
+
 [dependencies]
 thiserror = "1.0"
 tracing = "0.1"

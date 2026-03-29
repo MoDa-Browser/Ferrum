@@ -19,11 +19,20 @@ impl Sandbox {
     }
 
     pub fn build(&self) -> Result<SandboxInstance> {
-        let mut command = Command::new("/bin/sh");
+        let mut command = if cfg!(windows) {
+            Command::new("cmd")
+        } else {
+            Command::new("/bin/sh")
+        };
         
         if self.namespace_config.enable_pid {
-            command.arg("-c");
-            command.arg("echo 'PID namespace enabled'");
+            if cfg!(windows) {
+                command.arg("/c");
+                command.arg("echo PID namespace enabled");
+            } else {
+                command.arg("-c");
+                command.arg("echo 'PID namespace enabled'");
+            }
         }
 
         let child = command.spawn().map_err(|e| {

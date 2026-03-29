@@ -51,6 +51,7 @@ jobs:
         cd ../network && cargo fmt -- --check
         cd ../storage && cargo fmt -- --check
         cd ../platform && cargo fmt -- --check
+        cd ../render && cargo fmt -- --check
     
     - name: Run Clippy
       run: |
@@ -60,6 +61,7 @@ jobs:
         cd ../network && cargo clippy -- -D warnings
         cd ../storage && cargo clippy -- -D warnings
         cd ../platform && cargo clippy -- -D warnings
+        cd ../render && cargo clippy -- -D warnings
     
     - name: Run tests
       run: |
@@ -69,33 +71,7 @@ jobs:
         cd ../network && cargo test
         cd ../storage && cargo test
         cd ../platform && cargo test
-
-  cpp-check:
-    name: C++ Code Quality
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y cmake clang-tidy cppcheck
-    
-    - name: Configure CMake
-      run: |
-        mkdir build
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Debug
-    
-    - name: Run clang-tidy
-      run: |
-        cd build
-        run-clang-tidy -p . ../src/render/src/
-    
-    - name: Run cppcheck
-      run: |
-        cppcheck --enable=all --error-exitcode=1 --suppress=missingIncludeSystem src/render/src/
+        cd ../render && cargo test
 
   build:
     name: Build Project
@@ -123,15 +99,6 @@ jobs:
         toolchain: stable
         override: true
     
-    - name: Install CMake
-      run: |
-        if [ "$RUNNER_OS" == "Linux" ]; then
-          sudo apt-get install -y cmake
-        elif [ "$RUNNER_OS" == "macOS" ]; then
-          brew install cmake
-        fi
-      shell: bash
-    
     - name: Build Rust components
       run: |
         cd src/security && cargo build --release
@@ -140,13 +107,7 @@ jobs:
         cd ../network && cargo build --release
         cd ../storage && cargo build --release
         cd ../platform && cargo build --release
-    
-    - name: Build C++ components
-      run: |
-        mkdir build
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release
-        cmake --build . --config Release
+        cd ../render && cargo build --release
 
   security-audit:
     name: Security Audit
@@ -173,6 +134,7 @@ jobs:
         cd ../network && cargo audit
         cd ../storage && cargo audit
         cd ../platform && cargo audit
+        cd ../render && cargo audit
 
   code-coverage:
     name: Code Coverage
@@ -199,6 +161,7 @@ jobs:
         cd ../network && cargo tarpaulin --out Xml --output-dir ../../coverage/network
         cd ../storage && cargo tarpaulin --out Xml --output-dir ../../coverage/storage
         cd ../platform && cargo tarpaulin --out Xml --output-dir ../../coverage/platform
+        cd ../render && cargo tarpaulin --out Xml --output-dir ../../coverage/render
     
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3

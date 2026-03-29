@@ -6,6 +6,7 @@ mod ipc;
 mod network;
 mod storage;
 mod platform;
+mod render;
 
 use security::{CapabilityToken, Capability, PermissionManager, PermissionPolicy};
 use sandbox::{Sandbox, NamespaceConfig};
@@ -13,6 +14,7 @@ use ipc::{IpcChannel, IpcMessage, IpcSecurity};
 use network::{HttpClient, TlsConfig, TlsVersion};
 use storage::SecureStorage;
 use platform::{Platform, PlatformInfo};
+use render::{LayoutEngine, DOMNode, NodeType, Rect, BoxModel};
 
 fn main() {
     println!("MoDa Browser Core - Prototype");
@@ -123,6 +125,29 @@ fn main() {
             Err(e) => println!("Decryption error: {}", e),
         }
     }
+    println!();
+
+    println!("8. Render Engine");
+    println!("----------------");
+    let mut layout_engine = LayoutEngine::new();
+    layout_engine.parse_html("<html><body><h1>Hello, MoDa!</h1></body></html>");
+    layout_engine.calculate_layout();
+    
+    println!("HTML parsed and layout calculated");
+    
+    if let Some(bounds) = layout_engine.get_element_bounds("root") {
+        println!("Root element bounds: x={}, y={}, width={}, height={}", 
+            bounds.x, bounds.y, bounds.width, bounds.height);
+    }
+    
+    let div_node = DOMNode::new("test-div", NodeType::Element)
+        .with_tag_name("div")
+        .with_text("Test content")
+        .with_bounds(Rect::new(10.0, 10.0, 200.0, 100.0));
+    
+    println!("Created DOM node: {} with bounds ({}, {}, {}, {})", 
+        div_node.tag_name, div_node.bounds.x, div_node.bounds.y, 
+        div_node.bounds.width, div_node.bounds.height);
     println!();
 
     println!("==============================");

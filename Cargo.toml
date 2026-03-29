@@ -18,6 +18,7 @@ members = [
     "src/network",
     "src/storage",
     "src/platform",
+    "src/render",
 ]
 
 [dependencies]
@@ -33,6 +34,7 @@ moda-ipc = { path = "src/ipc" }
 moda-network = { path = "src/network" }
 moda-storage = { path = "src/storage" }
 moda-platform = { path = "src/platform" }
+moda-render = { path = "src/render" }
 
 [dev-dependencies]
 criterion = "0.5"
