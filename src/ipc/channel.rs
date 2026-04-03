@@ -42,27 +42,34 @@ impl IpcChannel {
     }
 
     pub fn send(&self, message: IpcMessage) -> Result<()> {
-        self.sender.send(message).map_err(|e| {
-            IpcError::ChannelError(format!("Failed to send message: {}", e))
-        })?;
+        self.sender
+            .send(message)
+            .map_err(|e| IpcError::ChannelError(format!("Failed to send message: {}", e)))?;
         Ok(())
     }
 
     pub fn receive(&self) -> Result<IpcMessage> {
-        let receiver = self.receiver.lock()
+        let receiver = self
+            .receiver
+            .lock()
             .map_err(|e| IpcError::ChannelError(format!("Lock poisoned: {}", e)))?;
-        receiver.recv().map_err(|e| {
-            IpcError::ChannelError(format!("Failed to receive message: {}", e))
-        })
+        receiver
+            .recv()
+            .map_err(|e| IpcError::ChannelError(format!("Failed to receive message: {}", e)))
     }
 
     pub fn try_receive(&self) -> Result<Option<IpcMessage>> {
-        let receiver = self.receiver.lock()
+        let receiver = self
+            .receiver
+            .lock()
             .map_err(|e| IpcError::ChannelError(format!("Lock poisoned: {}", e)))?;
         match receiver.try_recv() {
             Ok(msg) => Ok(Some(msg)),
             Err(mpsc::TryRecvError::Empty) => Ok(None),
-            Err(e) => Err(IpcError::ChannelError(format!("Failed to receive message: {}", e))),
+            Err(e) => Err(IpcError::ChannelError(format!(
+                "Failed to receive message: {}",
+                e
+            ))),
         }
     }
 }
@@ -80,10 +87,10 @@ mod tests {
     #[test]
     fn test_ipc_channel() {
         let channel = IpcChannel::new();
-        
+
         let message = IpcMessage::new("source", "target", vec![1, 2, 3]);
         assert!(channel.send(message.clone()).is_ok());
-        
+
         let received = channel.receive().unwrap();
         assert_eq!(received.source, "source");
         assert_eq!(received.target, "target");

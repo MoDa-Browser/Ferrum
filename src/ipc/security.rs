@@ -72,10 +72,10 @@ mod tests {
     #[test]
     fn test_message_validation() {
         let security = IpcSecurity::new().with_authentication(true);
-        
+
         let mut message = IpcMessage::new("source", "target", vec![1, 2, 3]);
         assert!(security.validate_message(&message).is_ok());
-        
+
         message.source = String::new();
         assert!(security.validate_message(&message).is_err());
     }
@@ -83,13 +83,13 @@ mod tests {
     #[test]
     fn test_encryption() {
         let security = IpcSecurity::new().with_encryption(true);
-        
+
         let mut message = IpcMessage::new("source", "target", vec![1, 2, 3]);
         let original_payload = message.payload.clone();
-        
+
         security.encrypt_message(&mut message).unwrap();
         assert_ne!(message.payload, original_payload);
-        
+
         security.decrypt_message(&mut message).unwrap();
         assert_eq!(message.payload, original_payload);
     }

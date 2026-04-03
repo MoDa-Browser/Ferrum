@@ -24,7 +24,7 @@ impl Sandbox {
         } else {
             Command::new("/bin/sh")
         };
-        
+
         if self.namespace_config.enable_pid {
             if cfg!(windows) {
                 command.arg("/c");
@@ -35,9 +35,9 @@ impl Sandbox {
             }
         }
 
-        let child = command.spawn().map_err(|e| {
-            SandboxError::CreationFailed(format!("Failed to spawn process: {}", e))
-        })?;
+        let child = command
+            .spawn()
+            .map_err(|e| SandboxError::CreationFailed(format!("Failed to spawn process: {}", e)))?;
 
         Ok(SandboxInstance { child })
     }
@@ -46,9 +46,9 @@ impl Sandbox {
         let mut command = Command::new(program);
         command.args(args);
 
-        let child = command.spawn().map_err(|e| {
-            SandboxError::CreationFailed(format!("Failed to spawn process: {}", e))
-        })?;
+        let child = command
+            .spawn()
+            .map_err(|e| SandboxError::CreationFailed(format!("Failed to spawn process: {}", e)))?;
 
         Ok(SandboxInstance { child })
     }
@@ -66,9 +66,9 @@ pub struct SandboxInstance {
 
 impl SandboxInstance {
     pub fn wait(&mut self) -> Result<std::process::ExitStatus> {
-        self.child.wait().map_err(|e| {
-            SandboxError::ProcessError(format!("Failed to wait for process: {}", e))
-        })
+        self.child
+            .wait()
+            .map_err(|e| SandboxError::ProcessError(format!("Failed to wait for process: {}", e)))
     }
 
     pub fn id(&self) -> u32 {

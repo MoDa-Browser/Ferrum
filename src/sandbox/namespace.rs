@@ -52,9 +52,7 @@ mod tests {
 
     #[test]
     fn test_namespace_config() {
-        let config = NamespaceConfig::new()
-            .with_pid(true)
-            .with_network(true);
+        let config = NamespaceConfig::new().with_pid(true).with_network(true);
 
         assert!(config.enable_pid);
         assert!(config.enable_network);
