@@ -1,8 +1,9 @@
 use super::channel::IpcMessage;
 use super::{IpcError, Result};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum IpcProtocol {
+    #[default]
     Json,
     Binary,
     Custom(String),
@@ -40,11 +41,7 @@ impl IpcProtocol {
     }
 }
 
-impl Default for IpcProtocol {
-    fn default() -> Self {
-        Self::Json
-    }
-}
+
 
 #[cfg(test)]
 mod tests {

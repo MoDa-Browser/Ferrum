@@ -43,7 +43,7 @@ impl IpcSecurity {
     pub fn encrypt_message(&self, message: &mut IpcMessage) -> Result<()> {
         if self.enable_encryption {
             for byte in &mut message.payload {
-                *byte = *byte ^ 0xFF;
+                *byte ^= 0xFF;
             }
         }
         Ok(())
@@ -52,7 +52,7 @@ impl IpcSecurity {
     pub fn decrypt_message(&self, message: &mut IpcMessage) -> Result<()> {
         if self.enable_encryption {
             for byte in &mut message.payload {
-                *byte = *byte ^ 0xFF;
+                *byte ^= 0xFF;
             }
         }
         Ok(())
