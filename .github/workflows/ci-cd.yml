@@ -128,13 +128,7 @@ jobs:
     
     - name: Run security audit
       run: |
-        cd src/security && cargo audit
-        cd ../sandbox && cargo audit
-        cd ../ipc && cargo audit
-        cd ../network && cargo audit
-        cd ../storage && cargo audit
-        cd ../platform && cargo audit
-        cd ../render && cargo audit
+        cargo audit
 
   code-coverage:
     name: Code Coverage
@@ -155,18 +149,12 @@ jobs:
     
     - name: Generate coverage report
       run: |
-        cd src/security && cargo tarpaulin --out Xml --output-dir ../../coverage/security
-        cd ../sandbox && cargo tarpaulin --out Xml --output-dir ../../coverage/sandbox
-        cd ../ipc && cargo tarpaulin --out Xml --output-dir ../../coverage/ipc
-        cd ../network && cargo tarpaulin --out Xml --output-dir ../../coverage/network
-        cd ../storage && cargo tarpaulin --out Xml --output-dir ../../coverage/storage
-        cd ../platform && cargo tarpaulin --out Xml --output-dir ../../coverage/platform
-        cd ../render && cargo tarpaulin --out Xml --output-dir ../../coverage/render
+        cargo tarpaulin --out Xml --output-dir ./coverage
     
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
-        files: ./coverage/**/*.xml
+        files: ./coverage/*.xml
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
