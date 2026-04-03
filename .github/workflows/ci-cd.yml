@@ -180,10 +180,10 @@ jobs:
       run: |
         for commit in $(git rev-list --no-merges origin/main..HEAD); do
           message=$(git log -1 --pretty=%B $commit | head -n 1)
-          if [[ ! "$message" =~ ^(feat|fix|docs|style|refactor|test|chore|security)(\(.+\))?:\ .+ ]]; then
+          if [[ ! "$message" =~ ^(feat|fix|docs|style|refactor|test|chore|ci|security)(\(.+\))?:\ .+ ]]; then
             echo "Invalid commit message format: $message"
             echo "Expected format: type(scope): description"
-            echo "Allowed types: feat, fix, docs, style, refactor, test, chore, security"
+            echo "Allowed types: feat, fix, docs, style, refactor, test, chore, ci, security"
             exit 1
           fi
         done
