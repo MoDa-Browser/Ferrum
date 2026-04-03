@@ -179,7 +179,7 @@ jobs:
     - name: Check commit messages
       run: |
         for commit in $(git rev-list --no-merges origin/main..HEAD); do
-          message=$(git log -1 --pretty=%B $commit)
+          message=$(git log -1 --pretty=%s $commit)
           if [[ ! "$message" =~ ^(feat|fix|docs|style|refactor|test|chore)(\(.+\))?:\ .+ ]]; then
             echo "Invalid commit message format: $message"
             echo "Expected format: type(scope): description"
