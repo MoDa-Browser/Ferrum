@@ -1,9 +1,20 @@
 use super::channel::IpcMessage;
 use super::{IpcError, Result};
+use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, AES_256_GCM};
+use ring::rand::{SecureRandom, SystemRandom};
+use serde::{Deserialize, Serialize};
 
 pub struct IpcSecurity {
     enable_encryption: bool,
     enable_authentication: bool,
+    encryption_key: Option<LessSafeKey>,
+    rng: SystemRandom,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct EncryptedPayload {
+    nonce: Vec<u8>,
+    ciphertext: Vec<u8>,
 }
 
 impl IpcSecurity {
@@ -11,12 +22,21 @@ impl IpcSecurity {
         Self {
             enable_encryption: false,
             enable_authentication: false,
+            encryption_key: None,
+            rng: SystemRandom::new(),
         }
     }
 
     pub fn with_encryption(mut self, enable: bool) -> Self {
         self.enable_encryption = enable;
         self
+    }
+
+    pub fn with_key(mut self, key: &[u8; 32]) -> Result<Self> {
+        let unbound_key = UnboundKey::new(&AES_256_GCM, key)
+            .map_err(|e| IpcError::SecurityError(format!("Invalid encryption key: {}", e)))?;
+        self.encryption_key = Some(LessSafeKey::new(unbound_key));
+        Ok(self)
     }
 
     pub fn with_authentication(mut self, enable: bool) -> Self {
@@ -42,18 +62,61 @@ impl IpcSecurity {
 
     pub fn encrypt_message(&self, message: &mut IpcMessage) -> Result<()> {
         if self.enable_encryption {
-            for byte in &mut message.payload {
-                *byte ^= 0xFF;
-            }
+            let key = self.encryption_key.as_ref().ok_or_else(|| {
+                IpcError::SecurityError("Encryption key not set".to_string())
+            })?;
+
+            let mut nonce_bytes = [0u8; 12];
+            self.rng
+                .fill(&mut nonce_bytes)
+                .map_err(|e| IpcError::SecurityError(format!("Failed to generate nonce: {}", e)))?;
+
+            let nonce = Nonce::assume_unique_for_key(nonce_bytes);
+            let mut ciphertext = message.payload.clone();
+
+            key.seal_in_place_append_tag(
+                nonce,
+                Aad::empty(),
+                &mut ciphertext,
+            )
+            .map_err(|e| IpcError::SecurityError(format!("Encryption failed: {}", e)))?;
+
+            let encrypted = EncryptedPayload {
+                nonce: nonce_bytes.to_vec(),
+                ciphertext,
+            };
+
+            message.payload = serde_json::to_vec(&encrypted)
+                .map_err(|e| IpcError::SecurityError(format!("Failed to serialize encrypted data: {}", e)))?;
         }
         Ok(())
     }
 
     pub fn decrypt_message(&self, message: &mut IpcMessage) -> Result<()> {
         if self.enable_encryption {
-            for byte in &mut message.payload {
-                *byte ^= 0xFF;
-            }
+            let key = self.encryption_key.as_ref().ok_or_else(|| {
+                IpcError::SecurityError("Encryption key not set".to_string())
+            })?;
+
+            let encrypted: EncryptedPayload = serde_json::from_slice(&message.payload)
+                .map_err(|e| IpcError::SecurityError(format!("Failed to deserialize encrypted data: {}", e)))?;
+
+            let nonce = Nonce::assume_unique_for_key(
+                encrypted
+                    .nonce
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| IpcError::SecurityError("Invalid nonce length".to_string()))?,
+            );
+
+            let mut plaintext = encrypted.ciphertext.clone();
+
+            key.open_in_place(nonce, Aad::empty(), &mut plaintext)
+                .map_err(|e| IpcError::SecurityError(format!("Decryption failed: {}", e)))?;
+
+            plaintext.truncate(plaintext.len() - 16);
+
+            message.payload = plaintext;
         }
         Ok(())
     }
@@ -82,7 +145,11 @@ mod tests {
 
     #[test]
     fn test_encryption() {
-        let security = IpcSecurity::new().with_encryption(true);
+        let key = [0u8; 32];
+        let security = IpcSecurity::new()
+            .with_encryption(true)
+            .with_key(&key)
+            .unwrap();
 
         let mut message = IpcMessage::new("source", "target", vec![1, 2, 3]);
         let original_payload = message.payload.clone();
