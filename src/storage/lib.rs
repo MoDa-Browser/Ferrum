@@ -1,4 +1,4 @@
-use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, AES_256_GCM};
+use ring::aead::{Aad, Nonce, AES_256_GCM, UnboundKey, LessSafeKey};
 use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
 
@@ -69,7 +69,9 @@ impl SecureStorage {
         self.key
             .open_in_place(nonce, Aad::empty(), &mut plaintext)
             .map_err(|e| StorageError::DecryptionFailed(format!("Decryption failed: {}", e)))?;
-
+        
+        plaintext.truncate(plaintext.len() - 16);
+        
         Ok(plaintext)
     }
 }
@@ -84,9 +86,13 @@ mod tests {
         let storage = SecureStorage::new(&key);
 
         let plaintext = b"Hello, World!";
+        
         let encrypted = storage.encrypt(plaintext).unwrap();
+        assert!(!encrypted.ciphertext.is_empty(), "Encrypted data should not be empty");
+        assert!(!encrypted.nonce.is_empty(), "Nonce should not be empty");
+        
         let decrypted = storage.decrypt(&encrypted).unwrap();
-
-        assert_eq!(decrypted, plaintext);
+        assert!(!decrypted.is_empty(), "Decrypted data should not be empty");
+        assert_eq!(decrypted, plaintext, "Decrypted data should match original plaintext");
     }
 }
