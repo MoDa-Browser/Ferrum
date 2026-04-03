@@ -62,9 +62,10 @@ impl IpcSecurity {
 
     pub fn encrypt_message(&self, message: &mut IpcMessage) -> Result<()> {
         if self.enable_encryption {
-            let key = self.encryption_key.as_ref().ok_or_else(|| {
-                IpcError::SecurityError("Encryption key not set".to_string())
-            })?;
+            let key = self
+                .encryption_key
+                .as_ref()
+                .ok_or_else(|| IpcError::SecurityError("Encryption key not set".to_string()))?;
 
             let mut nonce_bytes = [0u8; 12];
             self.rng
@@ -74,32 +75,32 @@ impl IpcSecurity {
             let nonce = Nonce::assume_unique_for_key(nonce_bytes);
             let mut ciphertext = message.payload.clone();
 
-            key.seal_in_place_append_tag(
-                nonce,
-                Aad::empty(),
-                &mut ciphertext,
-            )
-            .map_err(|e| IpcError::SecurityError(format!("Encryption failed: {}", e)))?;
+            key.seal_in_place_append_tag(nonce, Aad::empty(), &mut ciphertext)
+                .map_err(|e| IpcError::SecurityError(format!("Encryption failed: {}", e)))?;
 
             let encrypted = EncryptedPayload {
                 nonce: nonce_bytes.to_vec(),
                 ciphertext,
             };
 
-            message.payload = serde_json::to_vec(&encrypted)
-                .map_err(|e| IpcError::SecurityError(format!("Failed to serialize encrypted data: {}", e)))?;
+            message.payload = serde_json::to_vec(&encrypted).map_err(|e| {
+                IpcError::SecurityError(format!("Failed to serialize encrypted data: {}", e))
+            })?;
         }
         Ok(())
     }
 
     pub fn decrypt_message(&self, message: &mut IpcMessage) -> Result<()> {
         if self.enable_encryption {
-            let key = self.encryption_key.as_ref().ok_or_else(|| {
-                IpcError::SecurityError("Encryption key not set".to_string())
-            })?;
+            let key = self
+                .encryption_key
+                .as_ref()
+                .ok_or_else(|| IpcError::SecurityError("Encryption key not set".to_string()))?;
 
-            let encrypted: EncryptedPayload = serde_json::from_slice(&message.payload)
-                .map_err(|e| IpcError::SecurityError(format!("Failed to deserialize encrypted data: {}", e)))?;
+            let encrypted: EncryptedPayload =
+                serde_json::from_slice(&message.payload).map_err(|e| {
+                    IpcError::SecurityError(format!("Failed to deserialize encrypted data: {}", e))
+                })?;
 
             let nonce = Nonce::assume_unique_for_key(
                 encrypted
