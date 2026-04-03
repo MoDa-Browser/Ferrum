@@ -41,8 +41,6 @@ impl IpcProtocol {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
