@@ -1,0 +1,14 @@
+[package]
+name = "moda-sandbox"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "moda_sandbox"
+path = "lib.rs"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "1.0"
+tracing = "0.1"
+nix = { version = "0.27", features = ["sched", "socket"] }
