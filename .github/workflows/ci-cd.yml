@@ -180,7 +180,7 @@ jobs:
       run: |
         for commit in $(git rev-list --no-merges origin/main..HEAD); do
           message=$(git log -1 --pretty=%s $commit)
-          if [[ ! "$message" =~ ^(feat|fix|docs|style|refactor|test|chore)(\(.+\))?:\ .+ ]]; then
+          if [[ ! "$message" =~ ^(feat|fix|docs|style|refactor|test|chore|security)(\(.+\))?:\ .+ ]]; then
             echo "Invalid commit message format: $message"
             echo "Expected format: type(scope): description"
             exit 1
