@@ -1,0 +1,9 @@
+refactor(M001): rewrite C++ render engine to Rust
+
+- Convert all C++ rendering components to Rust
+- Remove CMake build configuration for C++
+- Add render module to Rust workspace
+- Update CI/CD workflow to only use Rust
+- Fix platform compatibility issues in sandbox
+- Fix borrow checker errors in render module
+- All tests passing successfully
