@@ -79,7 +79,7 @@ mod tests {
             denied_capabilities: vec![Capability::FileSystemWrite],
         };
 
-        manager.add_policy("test-resource", policy);
+        let _ = manager.add_policy("test-resource", policy);
 
         assert!(manager
             .check_permission("test-resource", &Capability::NetworkAccess)
