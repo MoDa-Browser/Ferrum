@@ -1,0 +1,162 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, dev, feat, feature/* ]
+  pull_request:
+    branches: [ main, dev ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-check:
+    name: Rust Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        components: rustfmt, clippy
+        override: true
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo build
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Check formatting
+      run: |
+        cd src/security && cargo fmt -- --check
+        cd ../sandbox && cargo fmt -- --check
+        cd ../ipc && cargo fmt -- --check
+        cd ../network && cargo fmt -- --check
+        cd ../storage && cargo fmt -- --check
+        cd ../platform && cargo fmt -- --check
+        cd ../render && cargo fmt -- --check
+    
+    - name: Run Clippy
+      run: |
+        cd src/security && cargo clippy -- -D warnings
+        cd ../sandbox && cargo clippy -- -D warnings
+        cd ../ipc && cargo clippy -- -D warnings
+        cd ../network && cargo clippy -- -D warnings
+        cd ../storage && cargo clippy -- -D warnings
+        cd ../platform && cargo clippy -- -D warnings
+        cd ../render && cargo clippy -- -D warnings
+    
+    - name: Run tests
+      run: |
+        cd src/security && cargo test
+        cd ../sandbox && cargo test
+        cd ../ipc && cargo test
+        cd ../network && cargo test
+        cd ../storage && cargo test
+        cd ../platform && cargo test
+        cd ../render && cargo test
+
+  build:
+    name: Build Project
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust (Unix)
+      if: runner.os != 'Windows'
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    
+    - name: Install Rust (Windows)
+      if: runner.os == 'Windows'
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    
+    - name: Build Rust components
+      run: |
+        cd src/security && cargo build --release
+        cd ../sandbox && cargo build --release
+        cd ../ipc && cargo build --release
+        cd ../network && cargo build --release
+        cd ../storage && cargo build --release
+        cd ../platform && cargo build --release
+        cd ../render && cargo build --release
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    
+    - name: Install cargo-audit
+      run: cargo install cargo-audit
+    
+    - name: Run security audit
+      run: |
+        cargo audit
+
+  code-coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    
+    - name: Install tarpaulin
+      run: cargo install cargo-tarpaulin
+    
+    - name: Generate coverage report
+      run: |
+        cargo tarpaulin --out Xml --output-dir ./coverage
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./coverage/*.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+
