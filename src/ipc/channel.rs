@@ -261,8 +261,11 @@ impl BroadcastChannel {
         }
     }
 
-    pub fn get_receiver_count(&self) -> usize {
-        self.senders.read().unwrap().len()
+    pub fn get_receiver_count(&self) -> Result<usize> {
+        let senders = self.senders.read().map_err(|e| {
+            IpcError::ChannelError(format!("Failed to acquire lock: {}", e))
+        })?;
+        Ok(senders.len())
     }
 }
 
@@ -399,14 +402,14 @@ mod tests {
 
         let message = IpcMessage::new("source", "broadcast", vec![1, 2, 3]);
         assert!(broadcast.broadcast(message).is_ok());
-        assert_eq!(broadcast.get_receiver_count(), 1);
+        assert_eq!(broadcast.get_receiver_count().unwrap(), 1);
 
         let received = receiver.try_recv().unwrap();
         assert_eq!(received.source, "source");
         assert_eq!(received.target, "broadcast");
 
         assert!(broadcast.remove_receiver("test_receiver").is_ok());
-        assert_eq!(broadcast.get_receiver_count(), 0);
+        assert_eq!(broadcast.get_receiver_count().unwrap(), 0);
     }
 
     #[test]
