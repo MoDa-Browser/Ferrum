@@ -21,7 +21,6 @@ pub struct IpcSecurity {
     encryption_key: Option<LessSafeKey>,
     rng: SystemRandom,
     allowed_sources: HashSet<String>,
-    message_signatures: HashSet<String>,
     session_tokens: HashSet<String>,
     max_message_age_seconds: u64,
 }
@@ -46,7 +45,6 @@ impl IpcSecurity {
             encryption_key: None,
             rng: SystemRandom::new(),
             allowed_sources: HashSet::new(),
-            message_signatures: HashSet::new(),
             session_tokens: HashSet::new(),
             max_message_age_seconds: 300, // 默认 5 分钟
         }
