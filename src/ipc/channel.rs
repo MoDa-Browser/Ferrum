@@ -208,40 +208,59 @@ impl Default for IpcChannel {
 }
 
 pub struct BroadcastChannel {
-    sender: Arc<RwLock<mpsc::Sender<IpcMessage>>>,
-    receivers: Arc<RwLock<HashMap<String, mpsc::Receiver<IpcMessage>>>>,
+    senders: Arc<RwLock<HashMap<String, mpsc::Sender<IpcMessage>>>>,
 }
 
 impl BroadcastChannel {
     pub fn new() -> Self {
         Self {
-            sender: Arc::new(RwLock::new(mpsc::channel().0)),
-            receivers: Arc::new(RwLock::new(HashMap::new())),
+            senders: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
     pub fn add_receiver(&mut self, name: impl Into<String>) -> Result<mpsc::Receiver<IpcMessage>> {
         let (sender, receiver) = mpsc::channel();
-        self.receivers
+        self.senders
             .write()
             .map_err(|e| IpcError::ChannelError(format!("Failed to acquire lock: {}", e)))?
-            .insert(name.into(), receiver);
-        Ok(sender)
+            .insert(name.into(), sender);
+        Ok(receiver)
+    }
+
+    pub fn remove_receiver(&self, name: &str) -> Result<()> {
+        let mut senders = self.senders.write().map_err(|e| {
+            IpcError::ChannelError(format!("Failed to acquire lock: {}", e))
+        })?;
+        senders
+            .remove(name)
+            .ok_or_else(|| IpcError::ChannelError(format!("Receiver '{}' not found", name)))?;
+        Ok(())
     }
 
     pub fn broadcast(&self, message: IpcMessage) -> Result<()> {
-        let sender = self.sender.read().unwrap();
-        for (_, receiver) in self.receivers.read().unwrap().iter() {
-            if let Err(e) = receiver.try_recv() {
-                if let mpsc::TryRecvError::Disconnected = e {
-                    continue;
-                }
+        let senders = self.senders.read().map_err(|e| {
+            IpcError::ChannelError(format!("Failed to acquire lock: {}", e))
+        })?;
+
+        let mut errors = Vec::new();
+        for (name, sender) in senders.iter() {
+            if let Err(e) = sender.send(message.clone()) {
+                errors.push(format!("Failed to send to '{}': {}", name, e));
             }
         }
-        sender
-            .send(message)
-            .map_err(|e| IpcError::ChannelError(format!("Failed to broadcast message: {}", e)))?;
-        Ok(())
+
+        if !errors.is_empty() {
+            Err(IpcError::ChannelError(format!(
+                "Broadcast errors: {}",
+                errors.join(", ")
+            )))
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn get_receiver_count(&self) -> usize {
+        self.senders.read().unwrap().len()
     }
 }
 
@@ -374,10 +393,18 @@ mod tests {
     #[test]
     fn test_broadcast_channel() {
         let mut broadcast = BroadcastChannel::new();
-        let _receiver = broadcast.add_receiver("test_receiver").unwrap();
+        let receiver = broadcast.add_receiver("test_receiver").unwrap();
 
         let message = IpcMessage::new("source", "broadcast", vec![1, 2, 3]);
         assert!(broadcast.broadcast(message).is_ok());
+        assert_eq!(broadcast.get_receiver_count(), 1);
+
+        let received = receiver.try_recv().unwrap();
+        assert_eq!(received.source, "source");
+        assert_eq!(received.target, "broadcast");
+
+        assert!(broadcast.remove_receiver("test_receiver").is_ok());
+        assert_eq!(broadcast.get_receiver_count(), 0);
     }
 
     #[test]
