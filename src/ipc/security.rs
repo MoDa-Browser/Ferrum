@@ -25,9 +25,8 @@ struct EncryptedPayload {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct MessageSignature {
-    message_id: String,
+    nonce: Vec<u8>,
     signature: Vec<u8>,
-    timestamp: u64,
 }
 
 impl IpcSecurity {
@@ -139,7 +138,15 @@ impl IpcSecurity {
             key.seal_in_place_append_tag(nonce, Aad::empty(), &mut signature)
                 .map_err(|e| IpcError::SecurityError(format!("Signing failed: {}", e)))?;
 
-            Ok(signature)
+            // 将 nonce 和签名一起序列化
+            let message_signature = MessageSignature {
+                nonce: nonce_bytes.to_vec(),
+                signature,
+            };
+
+            serde_json::to_vec(&message_signature).map_err(|e| {
+                IpcError::SecurityError(format!("Failed to serialize signature: {}", e))
+            })
         } else {
             Err(IpcError::SecurityError(
                 "Encryption key not set for signing".to_string(),
@@ -149,18 +156,26 @@ impl IpcSecurity {
 
     pub fn verify_signature(&self, message: &IpcMessage, signature: &[u8]) -> Result<bool> {
         if let Some(key) = &self.encryption_key {
+            // 反序列化签名数据，获取 nonce 和签名
+            let message_signature: MessageSignature =
+                serde_json::from_slice(signature).map_err(|e| {
+                    IpcError::SecurityError(format!("Failed to deserialize signature: {}", e))
+                })?;
+
             let mut signature_data = message.id.clone().into_bytes();
             signature_data.extend_from_slice(&message.source.clone().into_bytes());
             signature_data.extend_from_slice(&message.target.clone().into_bytes());
             signature_data.extend_from_slice(&message.payload);
 
-            let mut nonce_bytes = [0u8; 12];
-            self.rng.fill(&mut nonce_bytes).map_err(|e| {
-                IpcError::SecurityError(format!("Failed to generate nonce: {}", e))
-            })?;
+            let nonce = Nonce::assume_unique_for_key(
+                message_signature
+                    .nonce
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| IpcError::SecurityError("Invalid nonce length".to_string()))?,
+            );
 
-            let nonce = Nonce::assume_unique_for_key(nonce_bytes);
-            let mut signature_copy = signature.to_vec();
+            let mut signature_copy = message_signature.signature.clone();
 
             match key.open_in_place(nonce, Aad::empty(), &mut signature_copy) {
                 Ok(_) => {
@@ -362,5 +377,28 @@ mod tests {
 
         // 默认情况下应该通过（消息是刚创建的）
         assert!(security.detect_connection_hijacking(&message).is_ok());
+    }
+
+    #[test]
+    fn test_sign_and_verify() {
+        let key = [0u8; 32];
+        let security = IpcSecurity::new()
+            .with_encryption(true)
+            .with_key(&key)
+            .unwrap();
+
+        let message = IpcMessage::new("source", "target", vec![1, 2, 3]);
+        let signature = security.sign_message(&message).unwrap();
+
+        let is_valid = security.verify_signature(&message, &signature).unwrap();
+        assert!(is_valid);
+
+        // 测试篡改消息
+        let mut tampered_message = message.clone();
+        tampered_message.payload = vec![4, 5, 6];
+        let is_valid_tampered = security
+            .verify_signature(&tampered_message, &signature)
+            .unwrap();
+        assert!(!is_valid_tampered);
     }
 }
