@@ -180,7 +180,11 @@ impl IpcSecurity {
                 ));
             }
 
-            if !self.validate_session_token(&message.id) {
+            let session_token = message.session_token.as_ref().ok_or_else(|| {
+                IpcError::ConnectionHijacked("Missing session token".to_string())
+            })?;
+
+            if !self.validate_session_token(session_token) {
                 return Err(IpcError::ConnectionHijacked(
                     "Invalid session token".to_string(),
                 ));
@@ -312,5 +316,22 @@ mod tests {
 
         security.revoke_session_token(&token);
         assert!(!security.validate_session_token(&token));
+    }
+
+    #[test]
+    fn test_detect_connection_hijacking() {
+        let mut security = IpcSecurity::new().with_authentication(true);
+        let token = security.generate_session_token();
+
+        let message = IpcMessage::new("source", "target", vec![1, 2, 3])
+            .with_session_token(&token);
+        assert!(security.detect_connection_hijacking(&message).is_ok());
+
+        let invalid_message = IpcMessage::new("source", "target", vec![1, 2, 3])
+            .with_session_token("invalid_token");
+        assert!(security.detect_connection_hijacking(&invalid_message).is_err());
+
+        let no_token_message = IpcMessage::new("source", "target", vec![1, 2, 3]);
+        assert!(security.detect_connection_hijacking(&no_token_message).is_err());
     }
 }

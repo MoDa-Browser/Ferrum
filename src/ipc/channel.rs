@@ -16,6 +16,7 @@ pub struct IpcMessage {
     pub ttl: Option<u32>,
     pub priority: MessagePriority,
     pub message_type: MessageType,
+    pub session_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -61,6 +62,7 @@ impl IpcMessage {
             ttl: None,
             priority: MessagePriority::default(),
             message_type: MessageType::default(),
+            session_token: None,
         }
     }
 
@@ -76,6 +78,11 @@ impl IpcMessage {
 
     pub fn with_type(mut self, message_type: MessageType) -> Self {
         self.message_type = message_type;
+        self
+    }
+
+    pub fn with_session_token(mut self, token: impl Into<String>) -> Self {
+        self.session_token = Some(token.into());
         self
     }
 
@@ -213,13 +220,13 @@ impl BroadcastChannel {
         }
     }
 
-    pub fn add_receiver(&mut self, name: impl Into<String>) -> mpsc::Receiver<IpcMessage> {
+    pub fn add_receiver(&mut self, name: impl Into<String>) -> Result<mpsc::Receiver<IpcMessage>> {
         let (sender, receiver) = mpsc::channel();
         self.receivers
             .write()
-            .unwrap()
+            .map_err(|e| IpcError::ChannelError(format!("Failed to acquire lock: {}", e)))?
             .insert(name.into(), receiver);
-        sender
+        Ok(sender)
     }
 
     pub fn broadcast(&self, message: IpcMessage) -> Result<()> {
@@ -307,17 +314,18 @@ impl ChannelManager {
         Ok(())
     }
 
-    pub fn list_channels(&self) -> Vec<String> {
-        self.channels.read().unwrap().keys().cloned().collect()
+    pub fn list_channels(&self) -> Result<Vec<String>> {
+        let channels = self.channels.read().map_err(|e| {
+            IpcError::ChannelError(format!("Failed to acquire lock: {}", e))
+        })?;
+        Ok(channels.keys().cloned().collect())
     }
 
-    pub fn list_broadcast_channels(&self) -> Vec<String> {
-        self.broadcast_channels
-            .read()
-            .unwrap()
-            .keys()
-            .cloned()
-            .collect()
+    pub fn list_broadcast_channels(&self) -> Result<Vec<String>> {
+        let broadcast_channels = self.broadcast_channels.read().map_err(|e| {
+            IpcError::ChannelError(format!("Failed to acquire lock: {}", e))
+        })?;
+        Ok(broadcast_channels.keys().cloned().collect())
     }
 }
 
@@ -366,7 +374,7 @@ mod tests {
     #[test]
     fn test_broadcast_channel() {
         let mut broadcast = BroadcastChannel::new();
-        let _receiver = broadcast.add_receiver("test_receiver");
+        let _receiver = broadcast.add_receiver("test_receiver").unwrap();
 
         let message = IpcMessage::new("source", "broadcast", vec![1, 2, 3]);
         assert!(broadcast.broadcast(message).is_ok());
@@ -384,6 +392,9 @@ mod tests {
 
         assert!(manager.remove_channel("test_channel").is_ok());
         assert!(manager.remove_channel("nonexistent").is_err());
+
+        let channels = manager.list_channels();
+        assert!(channels.is_ok());
     }
 
     #[test]
@@ -394,7 +405,15 @@ mod tests {
         assert!(manager.create_broadcast_channel("test_broadcast").is_err());
 
         let broadcasts = manager.list_broadcast_channels();
-        assert!(broadcasts.contains(&"test_broadcast".to_string()));
+        assert!(broadcasts.is_ok());
+        assert!(broadcasts.unwrap().contains(&"test_broadcast".to_string()));
+    }
+
+    #[test]
+    fn test_message_session_token() {
+        let message = IpcMessage::new("source", "target", vec![1, 2, 3])
+            .with_session_token("test_token");
+        assert_eq!(message.session_token, Some("test_token".to_string()));
     }
 
     #[test]
