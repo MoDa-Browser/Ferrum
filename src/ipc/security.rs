@@ -134,7 +134,7 @@ impl IpcSecurity {
                 )));
             }
 
-            if message.is_expired() {
+            if message.is_expired()? {
                 return Err(IpcError::MessageExpired);
             }
 

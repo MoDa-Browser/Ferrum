@@ -86,15 +86,15 @@ impl IpcMessage {
         self
     }
 
-    pub fn is_expired(&self) -> bool {
+    pub fn is_expired(&self) -> Result<bool> {
         if let Some(ttl) = self.ttl {
             let current_time = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .map_err(|_| IpcError::TimeError)?
                 .as_secs();
-            current_time > self.timestamp + (ttl as u64)
+            Ok(current_time > self.timestamp + (ttl as u64))
         } else {
-            false
+            Ok(false)
         }
     }
 }
@@ -150,15 +150,15 @@ impl ZeroCopyMessage {
         }
     }
 
-    pub fn is_expired(&self) -> bool {
+    pub fn is_expired(&self) -> Result<bool> {
         if let Some(ttl) = self.ttl {
             let current_time = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .map_err(|_| IpcError::TimeError)?
                 .as_secs();
-            current_time > self.timestamp + (ttl as u64)
+            Ok(current_time > self.timestamp + (ttl as u64))
         } else {
-            false
+            Ok(false)
         }
     }
 }
@@ -263,7 +263,7 @@ impl BroadcastChannel {
     }
 
     pub fn broadcast(&self, message: IpcMessage) -> Result<()> {
-        if message.is_expired() {
+        if message.is_expired()? {
             return Err(IpcError::MessageExpired);
         }
 
@@ -428,7 +428,7 @@ mod tests {
     #[test]
     fn test_message_ttl() {
         let message = IpcMessage::new("source", "target", vec![1, 2, 3]).with_ttl(60);
-        assert!(!message.is_expired());
+        assert!(!message.is_expired().unwrap());
     }
 
     #[test]
