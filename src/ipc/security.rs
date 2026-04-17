@@ -116,6 +116,18 @@ impl IpcSecurity {
             if message.is_expired() {
                 return Err(IpcError::MessageExpired);
             }
+
+            // 检查消息是否超过最大允许年龄
+            let current_time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(|e| {
+                    IpcError::SecurityError(format!("Failed to get system time: {}", e))
+                })?
+                .as_secs();
+
+            if current_time - message.timestamp > self.max_message_age_seconds {
+                return Err(IpcError::MessageExpired);
+            }
         }
         Ok(())
     }
@@ -400,5 +412,24 @@ mod tests {
             .verify_signature(&tampered_message, &signature)
             .unwrap();
         assert!(!is_valid_tampered);
+    }
+
+    #[test]
+    fn test_validate_message_with_max_age() {
+        let security = IpcSecurity::new()
+            .with_authentication(true)
+            .with_max_message_age(1); // 1 秒
+
+        let message = IpcMessage::new("source", "target", vec![1, 2, 3]);
+        assert!(security.validate_message(&message).is_ok());
+
+        // 创建一个旧消息（时间戳为 10 秒前）
+        let mut old_message = message.clone();
+        old_message.timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            - 10;
+        assert!(security.validate_message(&old_message).is_err());
     }
 }
