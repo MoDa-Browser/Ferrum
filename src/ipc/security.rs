@@ -1,5 +1,6 @@
 use super::channel::IpcMessage;
 use super::{IpcError, Result};
+use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
 use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, AES_256_GCM};
 use ring::rand::{SecureRandom, SystemRandom};
@@ -54,12 +55,30 @@ impl IpcSecurity {
     }
 
     pub fn with_key(mut self, key: &[u8; 32]) -> Result<Self> {
-        let unbound_key = UnboundKey::new(&AES_256_GCM, key)
+        // 使用 HKDF 从主密钥派生独立的加密和签名密钥
+        let hkdf = Hkdf::<Sha256>::new(None, key);
+
+        // 派生加密密钥
+        let mut encryption_key_bytes = [0u8; 32];
+        hkdf.expand(b"moda-ipc-encryption-key", &mut encryption_key_bytes)
+            .map_err(|e| {
+                IpcError::SecurityError(format!("Failed to derive encryption key: {}", e))
+            })?;
+
+        // 派生签名密钥
+        let mut signature_key_bytes = [0u8; 32];
+        hkdf.expand(b"moda-ipc-signature-key", &mut signature_key_bytes)
+            .map_err(|e| {
+                IpcError::SecurityError(format!("Failed to derive signature key: {}", e))
+            })?;
+
+        // 设置加密密钥
+        let unbound_key = UnboundKey::new(&AES_256_GCM, &encryption_key_bytes)
             .map_err(|e| IpcError::SecurityError(format!("Invalid encryption key: {}", e)))?;
         self.encryption_key = Some(LessSafeKey::new(unbound_key));
 
-        // 同时设置签名密钥
-        let signature_key = Hmac::<Sha256>::new_from_slice(key)
+        // 设置签名密钥
+        let signature_key = Hmac::<Sha256>::new_from_slice(&signature_key_bytes)
             .map_err(|e| IpcError::SecurityError(format!("Invalid signature key: {}", e)))?;
         self.signature_key = Some(signature_key);
 
