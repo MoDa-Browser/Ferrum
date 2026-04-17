@@ -2,7 +2,7 @@ pub mod channel;
 pub mod protocol;
 pub mod security;
 
-pub use channel::{IpcChannel, IpcMessage};
+pub use channel::{BroadcastChannel, IpcChannel, IpcMessage, MessagePriority, MessageType};
 pub use protocol::IpcProtocol;
 pub use security::IpcSecurity;
 
@@ -16,6 +16,12 @@ pub enum IpcError {
     SerializationError(String),
     #[error("Security error: {0}")]
     SecurityError(String),
+    #[error("Capability verification failed: {0}")]
+    CapabilityError(String),
+    #[error("Message expired")]
+    MessageExpired,
+    #[error("Connection hijacked: {0}")]
+    ConnectionHijacked(String),
 }
 
 pub type Result<T> = std::result::Result<T, IpcError>;
