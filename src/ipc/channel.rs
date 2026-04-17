@@ -366,9 +366,43 @@ mod tests {
     #[test]
     fn test_broadcast_channel() {
         let mut broadcast = BroadcastChannel::new();
-        let receiver = broadcast.add_receiver("test_receiver");
+        let _receiver = broadcast.add_receiver("test_receiver");
 
         let message = IpcMessage::new("source", "broadcast", vec![1, 2, 3]);
         assert!(broadcast.broadcast(message).is_ok());
+    }
+
+    #[test]
+    fn test_channel_manager() {
+        let manager = ChannelManager::new();
+
+        assert!(manager.create_channel("test_channel").is_ok());
+        assert!(manager.create_channel("test_channel").is_err());
+
+        let channel = manager.get_channel("test_channel");
+        assert!(channel.is_ok());
+
+        assert!(manager.remove_channel("test_channel").is_ok());
+        assert!(manager.remove_channel("nonexistent").is_err());
+    }
+
+    #[test]
+    fn test_channel_manager_broadcast() {
+        let manager = ChannelManager::new();
+
+        assert!(manager.create_broadcast_channel("test_broadcast").is_ok());
+        assert!(manager.create_broadcast_channel("test_broadcast").is_err());
+
+        let broadcasts = manager.list_broadcast_channels();
+        assert!(broadcasts.contains(&"test_broadcast".to_string()));
+    }
+
+    #[test]
+    fn test_receive_with_timeout() {
+        let channel = IpcChannel::new();
+
+        let result = channel.receive_with_timeout(Duration::from_millis(100));
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
     }
 }
