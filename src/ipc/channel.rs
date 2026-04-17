@@ -217,11 +217,9 @@ impl IpcChannel {
         match receiver.recv_timeout(timeout) {
             Ok(msg) => Ok(Some(msg)),
             Err(mpsc::RecvTimeoutError::Timeout) => Ok(None),
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                Err(IpcError::ChannelError(
-                    "Channel disconnected, all senders dropped".to_string(),
-                ))
-            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => Err(IpcError::ChannelError(
+                "Channel disconnected, all senders dropped".to_string(),
+            )),
         }
     }
 }
@@ -253,9 +251,10 @@ impl BroadcastChannel {
     }
 
     pub fn remove_receiver(&self, name: &str) -> Result<()> {
-        let mut senders = self.senders.write().map_err(|e| {
-            IpcError::ChannelError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let mut senders = self
+            .senders
+            .write()
+            .map_err(|e| IpcError::ChannelError(format!("Failed to acquire lock: {}", e)))?;
         senders
             .remove(name)
             .ok_or_else(|| IpcError::ChannelError(format!("Receiver '{}' not found", name)))?;
@@ -263,9 +262,10 @@ impl BroadcastChannel {
     }
 
     pub fn broadcast(&self, message: IpcMessage) -> Result<()> {
-        let senders = self.senders.read().map_err(|e| {
-            IpcError::ChannelError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let senders = self
+            .senders
+            .read()
+            .map_err(|e| IpcError::ChannelError(format!("Failed to acquire lock: {}", e)))?;
 
         let mut errors = Vec::new();
         for (name, sender) in senders.iter() {
@@ -285,9 +285,10 @@ impl BroadcastChannel {
     }
 
     pub fn get_receiver_count(&self) -> Result<usize> {
-        let senders = self.senders.read().map_err(|e| {
-            IpcError::ChannelError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let senders = self
+            .senders
+            .read()
+            .map_err(|e| IpcError::ChannelError(format!("Failed to acquire lock: {}", e)))?;
         Ok(senders.len())
     }
 }
@@ -313,9 +314,10 @@ impl ChannelManager {
 
     pub fn create_channel(&self, name: impl Into<String>) -> Result<()> {
         let name = name.into();
-        let mut channels = self.channels.write().map_err(|e| {
-            IpcError::ChannelError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let mut channels = self
+            .channels
+            .write()
+            .map_err(|e| IpcError::ChannelError(format!("Failed to acquire lock: {}", e)))?;
         if channels.contains_key(&name) {
             return Err(IpcError::ChannelError(format!(
                 "Channel '{}' already exists",
@@ -327,9 +329,10 @@ impl ChannelManager {
     }
 
     pub fn get_channel(&self, name: &str) -> Result<IpcChannel> {
-        let channels = self.channels.read().map_err(|e| {
-            IpcError::ChannelError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let channels = self
+            .channels
+            .read()
+            .map_err(|e| IpcError::ChannelError(format!("Failed to acquire lock: {}", e)))?;
         channels
             .get(name)
             .cloned()
@@ -337,9 +340,10 @@ impl ChannelManager {
     }
 
     pub fn remove_channel(&self, name: &str) -> Result<()> {
-        let mut channels = self.channels.write().map_err(|e| {
-            IpcError::ChannelError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let mut channels = self
+            .channels
+            .write()
+            .map_err(|e| IpcError::ChannelError(format!("Failed to acquire lock: {}", e)))?;
         channels
             .remove(name)
             .ok_or_else(|| IpcError::ChannelError(format!("Channel '{}' not found", name)))?;
@@ -348,9 +352,10 @@ impl ChannelManager {
 
     pub fn create_broadcast_channel(&self, name: impl Into<String>) -> Result<()> {
         let name = name.into();
-        let mut broadcast_channels = self.broadcast_channels.write().map_err(|e| {
-            IpcError::ChannelError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let mut broadcast_channels = self
+            .broadcast_channels
+            .write()
+            .map_err(|e| IpcError::ChannelError(format!("Failed to acquire lock: {}", e)))?;
         if broadcast_channels.contains_key(&name) {
             return Err(IpcError::ChannelError(format!(
                 "Broadcast channel '{}' already exists",
@@ -362,16 +367,18 @@ impl ChannelManager {
     }
 
     pub fn list_channels(&self) -> Result<Vec<String>> {
-        let channels = self.channels.read().map_err(|e| {
-            IpcError::ChannelError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let channels = self
+            .channels
+            .read()
+            .map_err(|e| IpcError::ChannelError(format!("Failed to acquire lock: {}", e)))?;
         Ok(channels.keys().cloned().collect())
     }
 
     pub fn list_broadcast_channels(&self) -> Result<Vec<String>> {
-        let broadcast_channels = self.broadcast_channels.read().map_err(|e| {
-            IpcError::ChannelError(format!("Failed to acquire lock: {}", e))
-        })?;
+        let broadcast_channels = self
+            .broadcast_channels
+            .read()
+            .map_err(|e| IpcError::ChannelError(format!("Failed to acquire lock: {}", e)))?;
         Ok(broadcast_channels.keys().cloned().collect())
     }
 }
@@ -400,15 +407,15 @@ mod tests {
 
     #[test]
     fn test_message_priority() {
-        let message = IpcMessage::new("source", "target", vec![1, 2, 3])
-            .with_priority(MessagePriority::High);
+        let message =
+            IpcMessage::new("source", "target", vec![1, 2, 3]).with_priority(MessagePriority::High);
         assert_eq!(message.priority, MessagePriority::High);
     }
 
     #[test]
     fn test_message_type() {
-        let message = IpcMessage::new("source", "target", vec![1, 2, 3])
-            .with_type(MessageType::Request);
+        let message =
+            IpcMessage::new("source", "target", vec![1, 2, 3]).with_type(MessageType::Request);
         assert_eq!(message.message_type, MessageType::Request);
     }
 
@@ -466,8 +473,8 @@ mod tests {
 
     #[test]
     fn test_message_session_token() {
-        let message = IpcMessage::new("source", "target", vec![1, 2, 3])
-            .with_session_token("test_token");
+        let message =
+            IpcMessage::new("source", "target", vec![1, 2, 3]).with_session_token("test_token");
         assert_eq!(message.session_token, Some("test_token".to_string()));
     }
 
@@ -489,10 +496,11 @@ mod tests {
 
         // 序列化
         let serialized = serde_json::to_vec(&message).expect("Serialization should succeed");
-        
+
         // 反序列化
-        let deserialized: ZeroCopyMessage = serde_json::from_slice(&serialized).expect("Deserialization should succeed");
-        
+        let deserialized: ZeroCopyMessage =
+            serde_json::from_slice(&serialized).expect("Deserialization should succeed");
+
         assert_eq!(deserialized.id, message.id);
         assert_eq!(deserialized.source, message.source);
         assert_eq!(deserialized.target, message.target);

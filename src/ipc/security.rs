@@ -113,9 +113,7 @@ impl IpcSecurity {
                 ));
             }
 
-            if !self.allowed_sources.is_empty()
-                && !self.allowed_sources.contains(&message.source)
-            {
+            if !self.allowed_sources.is_empty() && !self.allowed_sources.contains(&message.source) {
                 return Err(IpcError::CapabilityError(format!(
                     "Source '{}' is not in allowed sources",
                     message.source
@@ -129,9 +127,7 @@ impl IpcSecurity {
             // 检查消息是否超过最大允许年龄
             let current_time = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map_err(|e| {
-                    IpcError::SecurityError(format!("Failed to get system time: {}", e))
-                })?
+                .map_err(|e| IpcError::SecurityError(format!("Failed to get system time: {}", e)))?
                 .as_secs();
 
             if current_time - message.timestamp > self.max_message_age_seconds {
@@ -158,9 +154,9 @@ impl IpcSecurity {
             })?;
 
             let mut nonce_bytes = [0u8; 12];
-            self.rng.fill(&mut nonce_bytes).map_err(|e| {
-                IpcError::SecurityError(format!("Failed to generate nonce: {}", e))
-            })?;
+            self.rng
+                .fill(&mut nonce_bytes)
+                .map_err(|e| IpcError::SecurityError(format!("Failed to generate nonce: {}", e)))?;
 
             let nonce = Nonce::assume_unique_for_key(nonce_bytes);
             let mut signature = data_to_sign;
@@ -234,24 +230,21 @@ impl IpcSecurity {
         if self.enable_authentication {
             let current_time = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map_err(|e| {
-                    IpcError::SecurityError(format!("Failed to get system time: {}", e))
-                })?
+                .map_err(|e| IpcError::SecurityError(format!("Failed to get system time: {}", e)))?
                 .as_secs();
 
             if current_time - message.timestamp > self.max_message_age_seconds {
-                return Err(IpcError::ConnectionHijacked(
-                    format!(
-                        "Message timestamp is too old ({}s > {}s), possible connection hijacking",
-                        current_time - message.timestamp,
-                        self.max_message_age_seconds
-                    ),
-                ));
+                return Err(IpcError::ConnectionHijacked(format!(
+                    "Message timestamp is too old ({}s > {}s), possible connection hijacking",
+                    current_time - message.timestamp,
+                    self.max_message_age_seconds
+                )));
             }
 
-            let session_token = message.session_token.as_ref().ok_or_else(|| {
-                IpcError::ConnectionHijacked("Missing session token".to_string())
-            })?;
+            let session_token = message
+                .session_token
+                .as_ref()
+                .ok_or_else(|| IpcError::ConnectionHijacked("Missing session token".to_string()))?;
 
             if !self.validate_session_token(session_token) {
                 return Err(IpcError::ConnectionHijacked(
@@ -392,16 +385,19 @@ mod tests {
         let mut security = IpcSecurity::new().with_authentication(true);
         let token = security.generate_session_token().unwrap();
 
-        let message = IpcMessage::new("source", "target", vec![1, 2, 3])
-            .with_session_token(&token);
+        let message = IpcMessage::new("source", "target", vec![1, 2, 3]).with_session_token(&token);
         assert!(security.detect_connection_hijacking(&message).is_ok());
 
-        let invalid_message = IpcMessage::new("source", "target", vec![1, 2, 3])
-            .with_session_token("invalid_token");
-        assert!(security.detect_connection_hijacking(&invalid_message).is_err());
+        let invalid_message =
+            IpcMessage::new("source", "target", vec![1, 2, 3]).with_session_token("invalid_token");
+        assert!(security
+            .detect_connection_hijacking(&invalid_message)
+            .is_err());
 
         let no_token_message = IpcMessage::new("source", "target", vec![1, 2, 3]);
-        assert!(security.detect_connection_hijacking(&no_token_message).is_err());
+        assert!(security
+            .detect_connection_hijacking(&no_token_message)
+            .is_err());
     }
 
     #[test]
@@ -411,8 +407,7 @@ mod tests {
             .with_max_message_age(60); // 1 分钟
 
         let token = security.generate_session_token().unwrap();
-        let message = IpcMessage::new("source", "target", vec![1, 2, 3])
-            .with_session_token(&token);
+        let message = IpcMessage::new("source", "target", vec![1, 2, 3]).with_session_token(&token);
 
         // 默认情况下应该通过（消息是刚创建的）
         assert!(security.detect_connection_hijacking(&message).is_ok());
