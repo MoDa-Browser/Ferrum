@@ -263,7 +263,6 @@ impl BroadcastChannel {
     }
 
     pub fn broadcast(&self, message: IpcMessage) -> Result<()> {
-        // 检查消息是否已过期，如果过期则不发送
         if message.is_expired() {
             return Err(IpcError::MessageExpired);
         }
@@ -274,8 +273,9 @@ impl BroadcastChannel {
             .map_err(|e| IpcError::ChannelError(format!("Failed to acquire lock: {}", e)))?;
 
         let mut errors = Vec::new();
+        let message_clone = message.clone();
         for (name, sender) in senders.iter() {
-            if let Err(e) = sender.send(message.clone()) {
+            if let Err(e) = sender.send(message_clone.clone()) {
                 errors.push(format!("Failed to send to '{}': {}", name, e));
             }
         }
