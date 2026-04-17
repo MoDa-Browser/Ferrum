@@ -86,16 +86,20 @@ impl IpcMessage {
         self
     }
 
-    pub fn is_expired(&self) -> Result<bool> {
-        if let Some(ttl) = self.ttl {
+    fn check_time_expiration(timestamp: u64, ttl: Option<u32>) -> Result<bool> {
+        if let Some(ttl) = ttl {
             let current_time = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .map_err(|_| IpcError::TimeError)?
+                .map_err(|e| IpcError::TimeError(format!("Failed to get system time: {}", e)))?
                 .as_secs();
-            Ok(current_time > self.timestamp + (ttl as u64))
+            Ok(current_time > timestamp + (ttl as u64))
         } else {
             Ok(false)
         }
+    }
+
+    pub fn is_expired(&self) -> Result<bool> {
+        Self::check_time_expiration(self.timestamp, self.ttl)
     }
 }
 
@@ -151,15 +155,7 @@ impl ZeroCopyMessage {
     }
 
     pub fn is_expired(&self) -> Result<bool> {
-        if let Some(ttl) = self.ttl {
-            let current_time = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_err(|_| IpcError::TimeError)?
-                .as_secs();
-            Ok(current_time > self.timestamp + (ttl as u64))
-        } else {
-            Ok(false)
-        }
+        IpcMessage::check_time_expiration(self.timestamp, self.ttl)
     }
 }
 

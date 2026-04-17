@@ -127,6 +127,8 @@ impl IpcSecurity {
                 ));
             }
 
+            // 如果设置了允许源列表且列表不为空，则检查源是否在列表中
+            // 如果列表为空，则默认允许所有源
             if !self.allowed_sources.is_empty() && !self.allowed_sources.contains(&message.source) {
                 return Err(IpcError::CapabilityError(format!(
                     "Source '{}' is not in allowed sources",
@@ -202,6 +204,7 @@ impl IpcSecurity {
 
     pub fn detect_connection_hijacking(&self, message: &IpcMessage) -> Result<()> {
         if self.enable_authentication {
+            // 检查消息是否过期，如果过期则可能存在连接劫持
             let current_time = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map_err(|e| IpcError::SecurityError(format!("Failed to get system time: {}", e)))?

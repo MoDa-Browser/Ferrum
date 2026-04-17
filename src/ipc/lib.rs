@@ -25,8 +25,8 @@ pub enum IpcError {
     MessageExpired,
     #[error("Connection hijacked: {0}")]
     ConnectionHijacked(String),
-    #[error("Time error: system time is invalid")]
-    TimeError,
+    #[error("Time error: {0}")]
+    TimeError(String),
 }
 
 pub type Result<T> = std::result::Result<T, IpcError>;
