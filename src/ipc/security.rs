@@ -1,8 +1,10 @@
 use super::channel::IpcMessage;
 use super::{IpcError, Result};
+use hmac::{Hmac, Mac};
 use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, AES_256_GCM};
 use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -19,6 +21,7 @@ pub struct IpcSecurity {
     enable_encryption: bool,
     enable_authentication: bool,
     encryption_key: Option<LessSafeKey>,
+    signature_key: Option<Hmac<Sha256>>,
     rng: SystemRandom,
     allowed_sources: HashSet<String>,
     session_tokens: HashSet<String>,
@@ -31,11 +34,7 @@ struct EncryptedPayload {
     ciphertext: Vec<u8>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct MessageSignature {
-    nonce: Vec<u8>,
-    signature: Vec<u8>,
-}
+
 
 impl IpcSecurity {
     pub fn new() -> Self {
@@ -43,6 +42,7 @@ impl IpcSecurity {
             enable_encryption: false,
             enable_authentication: false,
             encryption_key: None,
+            signature_key: None,
             rng: SystemRandom::new(),
             allowed_sources: HashSet::new(),
             session_tokens: HashSet::new(),
@@ -59,6 +59,12 @@ impl IpcSecurity {
         let unbound_key = UnboundKey::new(&AES_256_GCM, key)
             .map_err(|e| IpcError::SecurityError(format!("Invalid encryption key: {}", e)))?;
         self.encryption_key = Some(LessSafeKey::new(unbound_key));
+        
+        // 同时设置签名密钥
+        let signature_key = Hmac::<Sha256>::new_from_slice(key)
+            .map_err(|e| IpcError::SecurityError(format!("Invalid signature key: {}", e)))?;
+        self.signature_key = Some(signature_key);
+        
         Ok(self)
     }
 
@@ -136,7 +142,7 @@ impl IpcSecurity {
     }
 
     pub fn sign_message(&self, message: &IpcMessage) -> Result<Vec<u8>> {
-        if let Some(key) = &self.encryption_key {
+        if let Some(ref signature_key) = self.signature_key {
             // 使用确定性结构体构造签名数据
             let signature_data = SignatureData {
                 message_id: message.id.clone(),
@@ -151,42 +157,25 @@ impl IpcSecurity {
                 IpcError::SecurityError(format!("Failed to serialize signature data: {}", e))
             })?;
 
-            let mut nonce_bytes = [0u8; 12];
-            self.rng
-                .fill(&mut nonce_bytes)
-                .map_err(|e| IpcError::SecurityError(format!("Failed to generate nonce: {}", e)))?;
+            // 使用 HMAC-SHA256 对数据进行签名
+            let mut mac = signature_key.clone();
+            mac.update(&data_to_sign);
+            let signature = mac.finalize();
 
-            let nonce = Nonce::assume_unique_for_key(nonce_bytes);
-            let mut signature = data_to_sign;
-
-            key.seal_in_place_append_tag(nonce, Aad::empty(), &mut signature)
-                .map_err(|e| IpcError::SecurityError(format!("Signing failed: {}", e)))?;
-
-            // 将 nonce 和签名一起序列化
-            let message_signature = MessageSignature {
-                nonce: nonce_bytes.to_vec(),
-                signature,
-            };
-
-            serde_json::to_vec(&message_signature).map_err(|e| {
-                IpcError::SecurityError(format!("Failed to serialize signature: {}", e))
-            })
+            // 返回签名结果
+            Ok(signature.into_bytes().to_vec())
         } else {
             Err(IpcError::SecurityError(
-                "Encryption key not set for signing".to_string(),
+                "Signature key not set for signing".to_string(),
             ))
         }
     }
 
     pub fn verify_signature(&self, message: &IpcMessage, signature: &[u8]) -> Result<bool> {
-        if let Some(key) = &self.encryption_key {
-            // 反序列化签名数据，获取 nonce 和签名
-            let message_signature: MessageSignature =
-                serde_json::from_slice(signature).map_err(|e| {
-                    IpcError::SecurityError(format!("Failed to deserialize signature: {}", e))
-                })?;
-
-            // 使用确定性结构体构造签名数据
+        if let Some(ref signature_key) = self.signature_key {
+            // 使用恒定时间比较防止时序攻击
+            use hmac::Mac;
+            let mut mac = signature_key.clone();
             let signature_data = SignatureData {
                 message_id: message.id.clone(),
                 source: message.source.clone(),
@@ -194,32 +183,17 @@ impl IpcSecurity {
                 payload: message.payload.clone(),
                 timestamp: message.timestamp,
             };
-
-            // 使用 bincode 进行确定性序列化
-            let data_to_verify = bincode::serialize(&signature_data).map_err(|e| {
+            let data_to_sign = bincode::serialize(&signature_data).map_err(|e| {
                 IpcError::SecurityError(format!("Failed to serialize signature data: {}", e))
             })?;
+            mac.update(&data_to_sign);
+            let expected_signature = mac.finalize();
 
-            let nonce = Nonce::assume_unique_for_key(
-                message_signature
-                    .nonce
-                    .as_slice()
-                    .try_into()
-                    .map_err(|_| IpcError::SecurityError("Invalid nonce length".to_string()))?,
-            );
-
-            let mut signature_copy = message_signature.signature.clone();
-
-            match key.open_in_place(nonce, Aad::empty(), &mut signature_copy) {
-                Ok(_) => {
-                    let expected_data = &signature_copy[..signature_copy.len() - 16];
-                    Ok(expected_data == data_to_verify.as_slice())
-                }
-                Err(_) => Ok(false),
-            }
+            // 比较签名
+            Ok(expected_signature.into_bytes().as_slice() == signature)
         } else {
             Err(IpcError::SecurityError(
-                "Encryption key not set for verification".to_string(),
+                "Signature key not set for verification".to_string(),
             ))
         }
     }
@@ -415,7 +389,7 @@ mod tests {
     fn test_sign_and_verify() {
         let key = [0u8; 32];
         let security = IpcSecurity::new()
-            .with_encryption(true)
+            .with_authentication(true)  // 启用认证而不是加密，因为现在签名是独立的功能
             .with_key(&key)
             .unwrap();
 

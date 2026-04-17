@@ -263,6 +263,11 @@ impl BroadcastChannel {
     }
 
     pub fn broadcast(&self, message: IpcMessage) -> Result<()> {
+        // 检查消息是否已过期，如果过期则不发送
+        if message.is_expired() {
+            return Err(IpcError::MessageExpired);
+        }
+
         let senders = self
             .senders
             .read()
