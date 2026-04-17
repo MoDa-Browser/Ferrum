@@ -92,7 +92,13 @@ impl IpcMessage {
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_err(|e| IpcError::TimeError(format!("Failed to get system time: {}", e)))?
                 .as_secs();
-            Ok(current_time > timestamp + (ttl as u64))
+
+            // 使用 checked_add 避免整数溢出
+            let expiration_time = timestamp
+                .checked_add(ttl as u64)
+                .ok_or_else(|| IpcError::TimeError("Timestamp overflow detected".to_string()))?;
+
+            Ok(current_time > expiration_time)
         } else {
             Ok(false)
         }
