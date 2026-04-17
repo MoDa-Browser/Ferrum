@@ -67,12 +67,14 @@ impl IpcSecurity {
         self.allowed_sources.remove(source);
     }
 
-    pub fn generate_session_token(&mut self) -> String {
+    pub fn generate_session_token(&mut self) -> Result<String> {
         let mut token_bytes = [0u8; 32];
-        self.rng.fill(&mut token_bytes).unwrap();
+        self.rng.fill(&mut token_bytes).map_err(|e| {
+            IpcError::SecurityError(format!("Failed to generate session token: {}", e))
+        })?;
         let token = hex::encode(token_bytes);
         self.session_tokens.insert(token.clone());
-        token
+        Ok(token)
     }
 
     pub fn validate_session_token(&self, token: &str) -> bool {
@@ -311,7 +313,7 @@ mod tests {
     #[test]
     fn test_session_token() {
         let mut security = IpcSecurity::new();
-        let token = security.generate_session_token();
+        let token = security.generate_session_token().unwrap();
         assert!(security.validate_session_token(&token));
 
         security.revoke_session_token(&token);
@@ -321,7 +323,7 @@ mod tests {
     #[test]
     fn test_detect_connection_hijacking() {
         let mut security = IpcSecurity::new().with_authentication(true);
-        let token = security.generate_session_token();
+        let token = security.generate_session_token().unwrap();
 
         let message = IpcMessage::new("source", "target", vec![1, 2, 3])
             .with_session_token(&token);
