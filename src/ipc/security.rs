@@ -14,6 +14,7 @@ pub struct IpcSecurity {
     allowed_sources: HashSet<String>,
     message_signatures: HashSet<String>,
     session_tokens: HashSet<String>,
+    max_message_age_seconds: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,6 +40,7 @@ impl IpcSecurity {
             allowed_sources: HashSet::new(),
             message_signatures: HashSet::new(),
             session_tokens: HashSet::new(),
+            max_message_age_seconds: 300, // 默认 5 分钟
         }
     }
 
@@ -56,6 +58,11 @@ impl IpcSecurity {
 
     pub fn with_authentication(mut self, enable: bool) -> Self {
         self.enable_authentication = enable;
+        self
+    }
+
+    pub fn with_max_message_age(mut self, max_age_seconds: u64) -> Self {
+        self.max_message_age_seconds = max_age_seconds;
         self
     }
 
@@ -173,12 +180,18 @@ impl IpcSecurity {
         if self.enable_authentication {
             let current_time = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .map_err(|e| {
+                    IpcError::SecurityError(format!("Failed to get system time: {}", e))
+                })?
                 .as_secs();
 
-            if current_time - message.timestamp > 300 {
+            if current_time - message.timestamp > self.max_message_age_seconds {
                 return Err(IpcError::ConnectionHijacked(
-                    "Message timestamp is too old, possible connection hijacking".to_string(),
+                    format!(
+                        "Message timestamp is too old ({}s > {}s), possible connection hijacking",
+                        current_time - message.timestamp,
+                        self.max_message_age_seconds
+                    ),
                 ));
             }
 
@@ -335,5 +348,19 @@ mod tests {
 
         let no_token_message = IpcMessage::new("source", "target", vec![1, 2, 3]);
         assert!(security.detect_connection_hijacking(&no_token_message).is_err());
+    }
+
+    #[test]
+    fn test_custom_max_message_age() {
+        let mut security = IpcSecurity::new()
+            .with_authentication(true)
+            .with_max_message_age(60); // 1 分钟
+
+        let token = security.generate_session_token().unwrap();
+        let message = IpcMessage::new("source", "target", vec![1, 2, 3])
+            .with_session_token(&token);
+
+        // 默认情况下应该通过（消息是刚创建的）
+        assert!(security.detect_connection_hijacking(&message).is_ok());
     }
 }
