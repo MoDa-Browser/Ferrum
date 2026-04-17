@@ -102,6 +102,18 @@ impl IpcSecurity {
         self.session_tokens.remove(token);
     }
 
+    fn check_message_age(&self, message: &IpcMessage) -> Result<()> {
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| IpcError::SecurityError(format!("Failed to get system time: {}", e)))?
+            .as_secs();
+
+        if current_time - message.timestamp > self.max_message_age_seconds {
+            return Err(IpcError::MessageExpired);
+        }
+        Ok(())
+    }
+
     pub fn validate_message(&self, message: &IpcMessage) -> Result<()> {
         if self.enable_authentication {
             if message.source.is_empty() {
@@ -126,15 +138,7 @@ impl IpcSecurity {
                 return Err(IpcError::MessageExpired);
             }
 
-            // 检查消息是否超过最大允许年龄
-            let current_time = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map_err(|e| IpcError::SecurityError(format!("Failed to get system time: {}", e)))?
-                .as_secs();
-
-            if current_time - message.timestamp > self.max_message_age_seconds {
-                return Err(IpcError::MessageExpired);
-            }
+            self.check_message_age(message)?;
         }
         Ok(())
     }
@@ -280,7 +284,8 @@ impl IpcSecurity {
             key.open_in_place(nonce, Aad::empty(), &mut plaintext)
                 .map_err(|e| IpcError::SecurityError(format!("Decryption failed: {}", e)))?;
 
-            plaintext.truncate(plaintext.len() - 16);
+            let tag_len = AES_256_GCM.tag_len();
+            plaintext.truncate(plaintext.len() - tag_len);
 
             message.payload = plaintext;
         }
