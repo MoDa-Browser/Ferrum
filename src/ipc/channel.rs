@@ -190,7 +190,7 @@ impl IpcChannel {
         let receiver = self
             .receiver
             .lock()
-            .map_err(|e| IpcError::ChannelError(format!("Lock poisoned: {}", e)))?;
+            .map_err(|e| IpcError::ChannelError(format!("Receiver lock poisoned: {}", e)))?;
         match receiver.recv_timeout(timeout) {
             Ok(msg) => Ok(Some(msg)),
             Err(mpsc::RecvTimeoutError::Timeout) => Ok(None),

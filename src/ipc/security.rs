@@ -6,6 +6,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SignatureData {
+    message_id: String,
+    source: String,
+    target: String,
+    payload: Vec<u8>,
+    timestamp: u64,
+}
+
 pub struct IpcSecurity {
     enable_encryption: bool,
     enable_authentication: bool,
@@ -133,19 +142,28 @@ impl IpcSecurity {
     }
 
     pub fn sign_message(&self, message: &IpcMessage) -> Result<Vec<u8>> {
-        let mut signature_data = message.id.clone().into_bytes();
-        signature_data.extend_from_slice(&message.source.clone().into_bytes());
-        signature_data.extend_from_slice(&message.target.clone().into_bytes());
-        signature_data.extend_from_slice(&message.payload);
-
         if let Some(key) = &self.encryption_key {
+            // 使用确定性结构体构造签名数据
+            let signature_data = SignatureData {
+                message_id: message.id.clone(),
+                source: message.source.clone(),
+                target: message.target.clone(),
+                payload: message.payload.clone(),
+                timestamp: message.timestamp,
+            };
+
+            // 使用 bincode 进行确定性序列化
+            let data_to_sign = bincode::serialize(&signature_data).map_err(|e| {
+                IpcError::SecurityError(format!("Failed to serialize signature data: {}", e))
+            })?;
+
             let mut nonce_bytes = [0u8; 12];
             self.rng.fill(&mut nonce_bytes).map_err(|e| {
                 IpcError::SecurityError(format!("Failed to generate nonce: {}", e))
             })?;
 
             let nonce = Nonce::assume_unique_for_key(nonce_bytes);
-            let mut signature = signature_data.clone();
+            let mut signature = data_to_sign;
 
             key.seal_in_place_append_tag(nonce, Aad::empty(), &mut signature)
                 .map_err(|e| IpcError::SecurityError(format!("Signing failed: {}", e)))?;
@@ -174,10 +192,19 @@ impl IpcSecurity {
                     IpcError::SecurityError(format!("Failed to deserialize signature: {}", e))
                 })?;
 
-            let mut signature_data = message.id.clone().into_bytes();
-            signature_data.extend_from_slice(&message.source.clone().into_bytes());
-            signature_data.extend_from_slice(&message.target.clone().into_bytes());
-            signature_data.extend_from_slice(&message.payload);
+            // 使用确定性结构体构造签名数据
+            let signature_data = SignatureData {
+                message_id: message.id.clone(),
+                source: message.source.clone(),
+                target: message.target.clone(),
+                payload: message.payload.clone(),
+                timestamp: message.timestamp,
+            };
+
+            // 使用 bincode 进行确定性序列化
+            let data_to_verify = bincode::serialize(&signature_data).map_err(|e| {
+                IpcError::SecurityError(format!("Failed to serialize signature data: {}", e))
+            })?;
 
             let nonce = Nonce::assume_unique_for_key(
                 message_signature
@@ -192,7 +219,7 @@ impl IpcSecurity {
             match key.open_in_place(nonce, Aad::empty(), &mut signature_copy) {
                 Ok(_) => {
                     let expected_data = &signature_copy[..signature_copy.len() - 16];
-                    Ok(expected_data == signature_data.as_slice())
+                    Ok(expected_data == data_to_verify.as_slice())
                 }
                 Err(_) => Ok(false),
             }
