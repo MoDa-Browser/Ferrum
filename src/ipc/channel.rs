@@ -163,6 +163,7 @@ impl ZeroCopyMessage {
     }
 }
 
+#[derive(Clone)]
 pub struct IpcChannel {
     sender: mpsc::Sender<IpcMessage>,
     receiver: Arc<Mutex<mpsc::Receiver<IpcMessage>>>,
