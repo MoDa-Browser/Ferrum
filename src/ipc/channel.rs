@@ -195,7 +195,9 @@ impl IpcChannel {
             Ok(msg) => Ok(Some(msg)),
             Err(mpsc::RecvTimeoutError::Timeout) => Ok(None),
             Err(mpsc::RecvTimeoutError::Disconnected) => {
-                Err(IpcError::ChannelError("Channel disconnected".to_string()))
+                Err(IpcError::ChannelError(
+                    "Channel disconnected, all senders dropped".to_string(),
+                ))
             }
         }
     }
