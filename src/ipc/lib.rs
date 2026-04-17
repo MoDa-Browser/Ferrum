@@ -2,7 +2,10 @@ pub mod channel;
 pub mod protocol;
 pub mod security;
 
-pub use channel::{BroadcastChannel, IpcChannel, IpcMessage, MessagePriority, MessageType};
+pub use channel::{
+    BroadcastChannel, ChannelManager, IpcChannel, IpcMessage, MessagePriority, MessageType,
+    ZeroCopyMessage,
+};
 pub use protocol::IpcProtocol;
 pub use security::IpcSecurity;
 

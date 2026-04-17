@@ -1,4 +1,5 @@
 use super::{IpcError, Result};
+use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::mpsc;
@@ -76,6 +77,47 @@ impl IpcMessage {
     pub fn with_type(mut self, message_type: MessageType) -> Self {
         self.message_type = message_type;
         self
+    }
+
+    pub fn is_expired(&self) -> bool {
+        if let Some(ttl) = self.ttl {
+            let current_time = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            current_time > self.timestamp + (ttl as u64)
+        } else {
+            false
+        }
+    }
+}
+
+pub struct ZeroCopyMessage {
+    pub id: String,
+    pub source: String,
+    pub target: String,
+    pub payload: Bytes,
+    pub timestamp: u64,
+    pub ttl: Option<u32>,
+    pub priority: MessagePriority,
+    pub message_type: MessageType,
+}
+
+impl ZeroCopyMessage {
+    pub fn new(source: impl Into<String>, target: impl Into<String>, payload: Bytes) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            source: source.into(),
+            target: target.into(),
+            payload,
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            ttl: None,
+            priority: MessagePriority::default(),
+            message_type: MessageType::default(),
+        }
     }
 
     pub fn is_expired(&self) -> bool {
@@ -197,6 +239,89 @@ impl BroadcastChannel {
 }
 
 impl Default for BroadcastChannel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub struct ChannelManager {
+    channels: Arc<RwLock<HashMap<String, IpcChannel>>>,
+    broadcast_channels: Arc<RwLock<HashMap<String, BroadcastChannel>>>,
+}
+
+impl ChannelManager {
+    pub fn new() -> Self {
+        Self {
+            channels: Arc::new(RwLock::new(HashMap::new())),
+            broadcast_channels: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    pub fn create_channel(&self, name: impl Into<String>) -> Result<()> {
+        let name = name.into();
+        let mut channels = self.channels.write().map_err(|e| {
+            IpcError::ChannelError(format!("Failed to acquire lock: {}", e))
+        })?;
+        if channels.contains_key(&name) {
+            return Err(IpcError::ChannelError(format!(
+                "Channel '{}' already exists",
+                name
+            )));
+        }
+        channels.insert(name, IpcChannel::new());
+        Ok(())
+    }
+
+    pub fn get_channel(&self, name: &str) -> Result<IpcChannel> {
+        let channels = self.channels.read().map_err(|e| {
+            IpcError::ChannelError(format!("Failed to acquire lock: {}", e))
+        })?;
+        channels
+            .get(name)
+            .cloned()
+            .ok_or_else(|| IpcError::ChannelError(format!("Channel '{}' not found", name)))
+    }
+
+    pub fn remove_channel(&self, name: &str) -> Result<()> {
+        let mut channels = self.channels.write().map_err(|e| {
+            IpcError::ChannelError(format!("Failed to acquire lock: {}", e))
+        })?;
+        channels
+            .remove(name)
+            .ok_or_else(|| IpcError::ChannelError(format!("Channel '{}' not found", name)))?;
+        Ok(())
+    }
+
+    pub fn create_broadcast_channel(&self, name: impl Into<String>) -> Result<()> {
+        let name = name.into();
+        let mut broadcast_channels = self.broadcast_channels.write().map_err(|e| {
+            IpcError::ChannelError(format!("Failed to acquire lock: {}", e))
+        })?;
+        if broadcast_channels.contains_key(&name) {
+            return Err(IpcError::ChannelError(format!(
+                "Broadcast channel '{}' already exists",
+                name
+            )));
+        }
+        broadcast_channels.insert(name, BroadcastChannel::new());
+        Ok(())
+    }
+
+    pub fn list_channels(&self) -> Vec<String> {
+        self.channels.read().unwrap().keys().cloned().collect()
+    }
+
+    pub fn list_broadcast_channels(&self) -> Vec<String> {
+        self.broadcast_channels
+            .read()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect()
+    }
+}
+
+impl Default for ChannelManager {
     fn default() -> Self {
         Self::new()
     }
