@@ -34,8 +34,6 @@ struct EncryptedPayload {
     ciphertext: Vec<u8>,
 }
 
-
-
 impl IpcSecurity {
     pub fn new() -> Self {
         Self {
@@ -59,12 +57,12 @@ impl IpcSecurity {
         let unbound_key = UnboundKey::new(&AES_256_GCM, key)
             .map_err(|e| IpcError::SecurityError(format!("Invalid encryption key: {}", e)))?;
         self.encryption_key = Some(LessSafeKey::new(unbound_key));
-        
+
         // 同时设置签名密钥
         let signature_key = Hmac::<Sha256>::new_from_slice(key)
             .map_err(|e| IpcError::SecurityError(format!("Invalid signature key: {}", e)))?;
         self.signature_key = Some(signature_key);
-        
+
         Ok(self)
     }
 
@@ -389,7 +387,7 @@ mod tests {
     fn test_sign_and_verify() {
         let key = [0u8; 32];
         let security = IpcSecurity::new()
-            .with_authentication(true)  // 启用认证而不是加密，因为现在签名是独立的功能
+            .with_authentication(true) // 启用认证而不是加密，因为现在签名是独立的功能
             .with_key(&key)
             .unwrap();
 
