@@ -99,15 +99,38 @@ impl IpcMessage {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZeroCopyMessage {
     pub id: String,
     pub source: String,
     pub target: String,
+    #[serde(with = "bytes_serde")]
     pub payload: Bytes,
     pub timestamp: u64,
     pub ttl: Option<u32>,
     pub priority: MessagePriority,
     pub message_type: MessageType,
+}
+
+// 为 Bytes 类型添加序列化/反序列化支持
+mod bytes_serde {
+    use bytes::Bytes;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S>(bytes: &Bytes, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_bytes(bytes.as_ref())
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Bytes, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let bytes = Vec::<u8>::deserialize(deserializer)?;
+        Ok(Bytes::from(bytes))
+    }
 }
 
 impl ZeroCopyMessage {
@@ -455,5 +478,27 @@ mod tests {
         let result = channel.receive_with_timeout(Duration::from_millis(100));
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_zero_copy_message_serialization() {
+        use serde_json;
+
+        let payload = Bytes::from(vec![1, 2, 3, 4, 5]);
+        let message = ZeroCopyMessage::new("source", "target", payload);
+
+        // 序列化
+        let serialized = serde_json::to_vec(&message).expect("Serialization should succeed");
+        
+        // 反序列化
+        let deserialized: ZeroCopyMessage = serde_json::from_slice(&serialized).expect("Deserialization should succeed");
+        
+        assert_eq!(deserialized.id, message.id);
+        assert_eq!(deserialized.source, message.source);
+        assert_eq!(deserialized.target, message.target);
+        assert_eq!(deserialized.payload, message.payload);
+        assert_eq!(deserialized.timestamp, message.timestamp);
+        assert_eq!(deserialized.priority, message.priority);
+        assert_eq!(deserialized.message_type, message.message_type);
     }
 }
