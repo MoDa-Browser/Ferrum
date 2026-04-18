@@ -1,8 +1,8 @@
-use moda_security::{PolicyManager, SecurityPolicy, Capability};
+use moda_security::{Capability, PolicyManager, SecurityPolicy};
 
 fn main() {
     println!("Testing Security Policy Module...");
-    
+
     let manager = PolicyManager::new();
 
     let policy = SecurityPolicy::new("test-resource", "Test resource policy")
@@ -25,6 +25,6 @@ fn main() {
         Ok(true) => println!("✗ File system write unexpectedly allowed"),
         Err(e) => println!("✗ Error checking file system write: {:?}", e),
     }
-    
+
     println!("Security Policy Module test completed!");
 }

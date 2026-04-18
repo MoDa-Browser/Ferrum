@@ -79,7 +79,7 @@ impl PolicyManager {
             .policies
             .write()
             .map_err(|e| SecurityError::PermissionDenied(format!("Lock poisoned: {}", e)))?;
-        
+
         policies.insert(policy.id.clone(), policy);
         Ok(())
     }
@@ -90,11 +90,10 @@ impl PolicyManager {
             .policies
             .read()
             .map_err(|e| SecurityError::PermissionDenied(format!("Lock poisoned: {}", e)))?;
-        
-        policies
-            .get(policy_id)
-            .cloned()
-            .ok_or_else(|| SecurityError::PermissionDenied(format!("Policy {} not found", policy_id)))
+
+        policies.get(policy_id).cloned().ok_or_else(|| {
+            SecurityError::PermissionDenied(format!("Policy {} not found", policy_id))
+        })
     }
 
     /// 检查资源是否具有特定能力
@@ -126,7 +125,7 @@ impl PolicyManager {
             .policies
             .write()
             .map_err(|e| SecurityError::PermissionDenied(format!("Lock poisoned: {}", e)))?;
-        
+
         if policies.remove(policy_id).is_some() {
             Ok(())
         } else {
@@ -143,7 +142,7 @@ impl PolicyManager {
             .policies
             .read()
             .map_err(|e| SecurityError::PermissionDenied(format!("Lock poisoned: {}", e)))?;
-        
+
         Ok(policies.keys().cloned().collect())
     }
 }
@@ -186,7 +185,7 @@ mod tests {
         assert!(!manager
             .check_resource_capability("test-resource", &Capability::FileSystemWrite)
             .unwrap());
-        
+
         assert!(manager
             .check_resource_capability("test-resource", &Capability::FileSystemRead)
             .is_err()); // 没有明确允许，默认拒绝
