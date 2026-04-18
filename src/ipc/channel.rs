@@ -19,33 +19,23 @@ pub struct IpcMessage {
     pub session_token: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum MessagePriority {
     Low,
+    #[default]
     Normal,
     High,
     Critical,
 }
 
-impl Default for MessagePriority {
-    fn default() -> Self {
-        MessagePriority::Normal
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum MessageType {
     Request,
     Response,
+    #[default]
     Event,
     Command,
     Heartbeat,
-}
-
-impl Default for MessageType {
-    fn default() -> Self {
-        MessageType::Event
-    }
 }
 
 impl IpcMessage {
